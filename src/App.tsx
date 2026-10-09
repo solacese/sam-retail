@@ -10,8 +10,6 @@ import {
   ChevronDown,
   Coins,
   Copy,
-  GitBranch,
-  HelpCircle,
   Info,
   Megaphone,
   Package,
@@ -23,8 +21,6 @@ import {
   ShieldCheck,
   ShoppingBag,
   Trophy,
-  Volume2,
-  VolumeX,
   X,
   Zap,
 } from "lucide-react";
@@ -38,7 +34,7 @@ import type {
   Resource,
   Resources,
 } from "./engine/types";
-import { AgentAvatar, Shop } from "./components/Illustrations";
+import { AgentAvatar } from "./components/Illustrations";
 import { EventStream } from "./components/EventStream";
 import { Modal } from "./components/Modal";
 const ICONS = {
@@ -89,9 +85,6 @@ function readBest(mode: string) {
 }
 function makeSeed() {
   return `MM-${crypto.getRandomValues(new Uint32Array(1))[0].toString(36).toUpperCase().slice(0, 7)}`;
-}
-function dailySeed() {
-  return `DAILY-${new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())}`;
 }
 function ResourcesBar({
   resources,
@@ -153,9 +146,8 @@ function OptionEffects({
   const later: string[] = [];
   if (effect.delivery) later.push("Delivery arrives in 2 decisions");
   if (effect.waste && effect.waste > 0)
-    later.push("Spoilage risk later: stock and cash loss");
-  if (effect.waste && effect.waste < 0)
-    later.push("Fresher stock; less spoilage");
+    later.push("More food waste later; stock and cash fall");
+  if (effect.waste && effect.waste < 0) later.push("Less food goes to waste");
   if (effect.promotion)
     later.push(`Promotion runs for ${effect.promotion} decisions`);
   if (effect.demand)
@@ -185,7 +177,7 @@ function OptionEffects({
     );
   if (effect.margin)
     later.push(
-      effect.margin > 0 ? "Trading margin improves" : "Trading margin falls",
+      effect.margin > 0 ? "Profit per sale improves" : "Profit per sale falls",
     );
   if (effect.delay)
     later.push(
@@ -212,7 +204,7 @@ function OptionEffects({
           </span>
         );
       })}
-      {closes && <span className="option-warning">This closes the shop</span>}
+      {closes && <span className="option-warning">This closes the store</span>}
       {later.length > 0 && (
         <span className="option-later">
           {later.map((t) => (
@@ -252,7 +244,7 @@ function ScoreFormula({ state }: { state: GameState }) {
 export default function App() {
   const query = new URLSearchParams(window.location.search);
   const [seed, setSeed] = useState(query.get("seed")?.slice(0, 64) || makeSeed);
-  const [mode, setMode] = useState<"full" | "quick">(
+  const [mode] = useState<"full" | "quick">(
     query.get("mode") === "quick" ? "quick" : "full",
   );
   const [engine, setEngine] = useState<RetailGame | null>(null);
@@ -260,7 +252,6 @@ export default function App() {
   const [paused, setPaused] = useState(false);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [feedback, setFeedback] = useState(false);
-  const [sound, setSound] = useState(false);
   const [best, setBest] = useState(readBest(mode));
   const [copied, setCopied] = useState(false);
   const [shareText, setShareText] = useState("");
@@ -270,35 +261,7 @@ export default function App() {
   const [dragX, setDragX] = useState(0);
   const [sessionBest, setSessionBest] = useState(false);
   const gameRef = useRef<HTMLElement>(null);
-  const audioRef = useRef<AudioContext | null>(null);
   const reduced = useReducedMotion();
-  const tone = useCallback(
-    (yes: boolean) => {
-      if (!sound) return;
-      try {
-        const ctx = audioRef.current ?? new AudioContext();
-        audioRef.current = ctx;
-        void ctx.resume();
-        const o = ctx.createOscillator(),
-          g = ctx.createGain();
-        o.type = "sine";
-        o.frequency.setValueAtTime(yes ? 440 : 260, ctx.currentTime);
-        o.frequency.exponentialRampToValueAtTime(
-          yes ? 660 : 196,
-          ctx.currentTime + 0.12,
-        );
-        g.gain.setValueAtTime(0.06, ctx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.19);
-        o.connect(g);
-        g.connect(ctx.destination);
-        o.start();
-        o.stop(ctx.currentTime + 0.2);
-      } catch {
-        /* Optional sound. */
-      }
-    },
-    [sound],
-  );
   const start = (newSeed = seed) => {
     const next = new RetailGame(newSeed.trim() || makeSeed(), mode);
     setEngine(next);
@@ -316,13 +279,12 @@ export default function App() {
   const decide = useCallback(
     (choice: Choice) => {
       if (!engine || !state?.proposal || paused || dialog || feedback) return;
-      tone(choice === "approve");
       setState(engine.resolve(choice));
       setFeedback(true);
       setHoverChoice(null);
       setDragX(0);
     },
-    [engine, state?.proposal, paused, dialog, feedback, tone],
+    [engine, state?.proposal, paused, dialog, feedback],
   );
   useEffect(() => {
     if (!feedback || paused || dialog) return;
@@ -388,11 +350,11 @@ export default function App() {
     if (!state) return;
     const url = new URL(window.location.href);
     url.search = `?seed=${encodeURIComponent(state.seed)}&mode=${state.mode}`;
-    const text = `I scored ${state.score.total.toLocaleString()}/10,000 in Solace MiniMart! ${rankFor(state.score.total)}. Can you beat my shift? Seed: ${state.seed}\n${url}`;
+    const text = `I scored ${state.score.total.toLocaleString()}/10,000 in Solace Mart! ${rankFor(state.score.total)}. Can you beat my shift? Seed: ${state.seed}\n${url}`;
     try {
       if (navigator.share)
         await navigator.share({
-          title: "MiniMart — Swipe to Survive",
+          title: "Solace Mart",
           text,
           url: url.toString(),
         });
@@ -447,46 +409,15 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="site-header">
-        <a
-          className="solace-brand"
-          href="https://solace.com"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <img
-            src={`${import.meta.env.BASE_URL}solace-logo.svg`}
-            alt="Solace"
-          />
-        </a>
         <button
           className="wordmark"
           onClick={() => (state ? setDialog("restart") : home())}
         >
-          minimart<span>SWIPE TO SURVIVE</span>
+          Solace Mart
         </button>
-        <div className="header-actions">
-          <button
-            className="icon-button"
-            onClick={() => setSound((v) => !v)}
-            aria-label={sound ? "Mute sound" : "Enable sound"}
-            aria-pressed={sound}
-          >
-            {sound ? <Volume2 size={17} /> : <VolumeX size={17} />}
-          </button>
-          <button
-            className="icon-button"
-            aria-label={state ? "Pause game" : "How to play"}
-            onClick={() =>
-              state ? setPaused((v) => !v) : setDialog("tutorial")
-            }
-          >
-            {state ? <Pause size={17} /> : <HelpCircle size={18} />}
-          </button>
-        </div>
       </header>
       {!state && (
         <main className="lobby">
-          <p className="lobby-intro">Every event changes everything.</p>
           <ResourcesBar
             resources={{
               inventory: 60,
@@ -499,20 +430,26 @@ export default function App() {
             <div className="stack-back" />
             <section className="game-card welcome-card">
               <div className="welcome-scene">
-                <Shop hero />
+                <img
+                  className="large-store-art"
+                  src={`${import.meta.env.BASE_URL}illustrations/large-store.png`}
+                  alt="A large supermarket with busy aisles, checkout teams, delivery trucks, and five robot helpers"
+                  fetchPriority="high"
+                />
               </div>
               <div className="card-copy">
                 <span className="character-name">YOU, THE NEW CEO</span>
                 <h1>
-                  A small store.
-                  <br />A big responsibility.
+                  A big store,
+                  <br />
+                  Solace Agents to Help
                 </h1>
                 <p>
-                  Five agents have opinions.
+                  A busy store. A warehouse. Online orders.
+                  <br />
+                  Five agents help you decide.
                   <br />
                   You have the final say.
-                  <br />
-                  Keep the doors open.
                 </p>
                 <span className="welcome-flourish">✦</span>
               </div>
@@ -524,40 +461,6 @@ export default function App() {
           >
             Open for business <ArrowRight size={17} />
           </button>
-          <div className="lobby-options">
-            <button
-              onClick={() => setMode((v) => (v === "full" ? "quick" : "full"))}
-              aria-label="Change game length"
-            >
-              {mode === "full" ? "5 days · untimed" : "Quick shift · 3 days"}{" "}
-              <ChevronDown size={11} />
-            </button>
-            <button
-              onClick={() => {
-                const s = dailySeed();
-                setSeed(s);
-                start(s);
-              }}
-            >
-              Daily challenge <ArrowUpRight size={11} />
-            </button>
-          </div>
-          <details className="seed-settings">
-            <summary>Choose a seed</summary>
-            <label>
-              Same seed. Same starting conditions.
-              <input
-                aria-label="Challenge seed"
-                value={seed}
-                maxLength={64}
-                onChange={(e) => setSeed(e.target.value)}
-              />
-            </label>
-          </details>
-          <div className="lobby-best">
-            <Trophy size={12} /> PERSONAL BEST{" "}
-            <strong>{best ? best.toLocaleString() : "—"}</strong>
-          </div>
         </main>
       )}
       {state && (
@@ -566,7 +469,7 @@ export default function App() {
           tabIndex={0}
           onKeyDown={keyDown}
           className="game-main"
-          aria-label="MiniMart gameplay. Left arrow reject, right arrow approve, space pause."
+          aria-label="Solace Mart gameplay. Left arrow reject, right arrow approve, space pause."
         >
           <ResourcesBar
             resources={state.resources}
@@ -695,36 +598,35 @@ export default function App() {
                         <div className="card-copy">
                           <h2>{p.template.title}</h2>
                           <p>{p.template.situation}</p>
-                          <div className="card-advice">
-                            <span>SAM</span>
-                            <p>
-                              {p.updated ? "New events. " : ""}
-                              {p.suggested === "approve"
-                                ? p.template.recommendation
-                                : `${p.template.rejectLabel}. Protect the resource buffer.`}
-                            </p>
-                            {p.updated && (
-                              <span
-                                className="updated-dot"
-                                title={p.updateReason}
-                              />
-                            )}
-                          </div>
                           <div className="card-technical">
-                            <div className="technical-model">
-                              <span>MODEL</span>
-                              <strong>{DEMO_MODELS[p.template.agent]}</strong>
-                              <small>simulated</small>
-                            </div>
                             <div className="technical-events">
-                              <span>EVENTS CORRELATED</span>
+                              <span>events:</span>{" "}
                               <code>
                                 {[
                                   ...new Set(
                                     p.evidence.map((e) => e.event.topic),
                                   ),
-                                ].join(", ")}
+                                ].join(" + ")}
                               </code>
+                            </div>
+                            <div className="technical-agent">
+                              <span>agent:</span>{" "}
+                              <p>
+                                <strong>{DEMO_MODELS[p.template.agent]}</strong>{" "}
+                                proposes to{" "}
+                                {(p.suggested === "approve"
+                                  ? p.template.recommendation
+                                  : `${p.template.rejectLabel}. Protect what is running low.`
+                                ).replace(/^./, (letter) =>
+                                  letter.toLowerCase(),
+                                )}
+                                {p.updated && (
+                                  <span
+                                    className="updated-dot"
+                                    title={p.updateReason}
+                                  />
+                                )}
+                              </p>
                             </div>
                           </div>
                           <button
@@ -960,6 +862,9 @@ export default function App() {
             </section>
           )}
           <div className="optional-panels">
+            <button aria-label="Pause game" onClick={() => setPaused(true)}>
+              <Pause size={13} /> Pause
+            </button>
             <button onClick={() => setDialog("shop")}>
               <ShoppingBag size={13} /> Shop
             </button>
@@ -973,18 +878,7 @@ export default function App() {
         </main>
       )}
       <footer className="site-footer">
-        <span>
-          <span className="sim-dot" /> SIMULATED AGENTS & EVENTS
-        </span>
         <button onClick={() => setDialog("tutorial")}>How to play</button>
-        <a
-          href="https://github.com/solacese/sam-retail"
-          target="_blank"
-          rel="noreferrer"
-          aria-label="View source code"
-        >
-          <GitBranch size={12} />
-        </a>
       </footer>
       {paused && !dialog && (
         <Modal
@@ -1057,9 +951,9 @@ export default function App() {
           </ul>
           <p className="fine-print">
             Six decisions per day. Read the effects under each option before
-            choosing. Days wait for you to continue. Five days for a full game,
-            three for a quick shift. Same seed + same decisions + same mid-card
-            timing = the same game.
+            choosing. Days wait for you to continue. The game generates its
+            events and agent proposals locally; no live AI or broker is
+            connected.
           </p>
           <button
             className="primary-button"
@@ -1146,9 +1040,13 @@ export default function App() {
         </Modal>
       )}
       {dialog === "shop" && state && (
-        <Modal title="Your MiniMart" onClose={() => setDialog(null)}>
-          <h2>Your little empire.</h2>
-          <Shop state={state} />
+        <Modal title="Your operation" onClose={() => setDialog(null)}>
+          <h2>Your retail operation.</h2>
+          <img
+            className="operation-art"
+            src={`${import.meta.env.BASE_URL}illustrations/large-store.png`}
+            alt="The supermarket, checkout area, and warehouse loading bays"
+          />
           <div className="report-grid">
             {[
               ["Revenue", money(state.revenue)],
@@ -1217,7 +1115,7 @@ export default function App() {
               [
                 "02",
                 "Patterns",
-                "A rolling event window and store state activate matching situations. 60 templates, no shuffled deck.",
+                "Recent events and store conditions select matching cards. 60 situations, shuffled within the best matches.",
               ],
               [
                 "03",

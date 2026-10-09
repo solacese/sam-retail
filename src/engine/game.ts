@@ -584,7 +584,7 @@ export class RetailGame {
       updated: false,
       recommendation:
         decision === "reject"
-          ? `Keep the buffer: ${t.rejectLabel.toLowerCase()}. ${t.agent} sees the operational risk, but our weakest resource needs protection.`
+          ? `${t.rejectLabel}. Protect what is running low.`
           : t.recommendation,
       suggested: decision,
     };
@@ -668,10 +668,10 @@ export class RetailGame {
       p.updated = true;
       p.updateReason =
         s.ops.queue > 6
-          ? "Checkout pressure rose while we were talking."
-          : "New sales arrived: demand is running ahead of forecast.";
+          ? "More customers are waiting at checkout."
+          : "Sales are higher than expected.";
       p.confidence = clamp(p.confidence + 2, 0, 99);
-      p.recommendation = `${p.updateReason} ${p.suggested === "approve" ? p.template.recommendation : `${p.template.rejectLabel}: protect the resource buffer.`}`;
+      p.recommendation = `${p.updateReason} ${p.suggested === "approve" ? p.template.recommendation : `${p.template.rejectLabel}. Protect what is running low.`}`;
       const e = s.events.at(-1)!;
       p.evidence.push({
         event: e,
@@ -884,9 +884,9 @@ export const rankFor = (score: number) =>
   score >= 8500
     ? "Retail royalty"
     : score >= 7000
-      ? "Neighborhood legend"
+      ? "Retail leader"
       : score >= 5000
-        ? "MiniMart maestro"
+        ? "Store team leader"
         : score >= 3000
-          ? "Scrappy shopkeeper"
+          ? "Retail operator"
           : "A promising first shift";

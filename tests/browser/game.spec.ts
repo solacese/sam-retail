@@ -121,7 +121,7 @@ test("event stream and shop are optional panels", async ({ page }) => {
   await page.getByRole("button", { name: "Close dialog" }).click();
   await page.getByRole("button", { name: "Shop", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Your little empire." }),
+    page.getByRole("heading", { name: "Your retail operation." }),
   ).toBeVisible();
   await expect(page.getByText("Seed: BROWSER-TEST")).toBeVisible();
 });
@@ -163,8 +163,12 @@ test("choices show directions without exact points and cards show technical cont
     /up|down/,
   );
   await expect(page.locator(".technical-events code")).toContainText("/");
-  await expect(page.locator(".technical-model strong")).toHaveText(
+  await expect(page.locator(".technical-agent strong")).toHaveText(
     /GPT|Claude|Gemini/,
   );
-  await expect(page.locator(".technical-model small")).toHaveText("simulated");
+  await expect(page.locator(".card-technical")).not.toContainText("simulated");
+  await expect(page.locator(".technical-agent")).toContainText("proposes to");
+  await expect(page.locator(".card-technical > div").first()).toHaveClass(
+    "technical-events",
+  );
 });

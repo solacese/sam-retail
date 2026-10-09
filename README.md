@@ -1,6 +1,6 @@
-# Solace MiniMart — Swipe to Survive
+# Solace Mart
 
-A tiny shop, five opinionated agents, and two choices. A Reigns-inspired retail survival game with executable event correlation, cascading consequences, and a deliberately simple interface.
+A large supermarket, a warehouse, online orders, five helpful agents, and two choices. A Reigns-inspired retail survival game with executable event correlation, cascading consequences, and a deliberately simple interface. All 60 cards use short, plain English.
 
 **Play:** https://solacese.github.io/sam-retail/
 
@@ -9,11 +9,11 @@ A tiny shop, five opinionated agents, and two choices. A Reigns-inspired retail 
 - Swipe right or press → to approve. Swipe left or press ← to reject. Both options also have buttons.
 - Keep inventory, security, reputation, and cash above zero. Meters show health; choices show directions rather than exact point values.
 - There is **no decision time limit**. Day reports wait for your “Open day” action.
-- A full game has five days, six decisions per day. Quick shifts have three days.
-- The card shows its correlated event topics and an **illustrative, simulated** GPT / Claude / Gemini label. No model API is invoked.
+- A game has five days, six decisions per day. Three-day shifts are available with `?mode=quick`.
+- The card shows correlated event topics first, followed by a proposal attributed to an illustrative GPT / Claude / Gemini label. No model API is invoked; this is explained in How to play.
 - “Why this card?” shows actual triggering events, the correlation rule, agent disagreement, and the deterministic recommendation.
 - Shop, Events, and The mesh are optional panels. Opening a panel pauses live updates. Space or the pause button also pauses.
-- Best scores are stored locally by mode. Replay a seed or share a link to challenge someone under the same starting conditions. Daily challenges use the Europe/Paris calendar date.
+- Best scores are stored locally and shown at the end. Replay a seed or share a link to challenge someone under the same starting conditions.
 
 ## Run locally
 
@@ -48,7 +48,8 @@ The backend event adapter is a transport foundation for a future authenticated S
 - `src/engine/situations.ts`: 60 authored situations, agent personalities, and approve/reject effects.
 - `src/engine/bus.ts`: local event bus and optional HTTPS/SSE backend transport.
 - `src/App.tsx`: one-card UI, untimed interactions, reports, technical trace, replay, sharing.
-- `src/components/Illustrations.tsx`: state-dependent shop and lightweight fallback avatars.
+- `public/illustrations/` and `public/portraits/`: generated supermarket artwork and agent portraits.
+- `src/components/Illustrations.tsx`: lightweight avatars for supporting panels and the retained SVG shop illustration.
 - `tests/`: engine invariants, seeded replay and balance qualification, mobile/desktop browser flows.
 
 More detail: [architecture](docs/architecture.md), [event schema](docs/event-schema.md), [decision models](docs/decision-models.md).
