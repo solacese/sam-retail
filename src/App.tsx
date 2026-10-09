@@ -276,11 +276,11 @@ export default function App() {
     if (!state) return;
     const url = new URL(window.location.href);
     url.search = `?seed=${encodeURIComponent(state.seed)}&mode=${state.mode}`;
-    const text = `I scored ${state.score.total.toLocaleString()}/10,000 in Solace Mart! ${rankFor(state.score.total)}. Can you beat my shift? Seed: ${state.seed}\n${url}`;
+    const text = `I scored ${state.score.total.toLocaleString()}/10,000 in ABC Shop! ${rankFor(state.score.total)}. Can you beat my shift? Seed: ${state.seed}\n${url}`;
     try {
       if (navigator.share)
         await navigator.share({
-          title: "Solace Mart",
+          title: "ABC Shop",
           text,
           url: url.toString(),
         });
@@ -340,7 +340,7 @@ export default function App() {
           className="wordmark"
           onClick={() => (state ? setDialog("restart") : home())}
         >
-          Solace Mart
+          ABC Shop
         </button>
       </header>
       {!state && (
@@ -365,17 +365,13 @@ export default function App() {
                 />
               </div>
               <div className="card-copy">
-                <h1>
-                  A big store,
-                  <br />
-                  Solace Agents to Help
-                </h1>
+                <h1>Run ABC Shop.</h1>
                 <p>
                   A busy store. A warehouse. Online orders.
                   <br />
-                  Five agents help you decide.
+                  Solace connects your five agents.
                   <br />
-                  You have the final say.
+                  You make the big decisions.
                 </p>
               </div>
             </section>
@@ -394,7 +390,7 @@ export default function App() {
           tabIndex={0}
           onKeyDown={keyDown}
           className="game-main"
-          aria-label="Solace Mart gameplay"
+          aria-label="ABC Shop gameplay"
         >
           <ResourcesBar
             resources={state.resources}
@@ -612,7 +608,7 @@ export default function App() {
               </span>
               <h2>
                 {state.status === "won"
-                  ? "Long live MiniMart."
+                  ? "ABC Shop is still open."
                   : `${LABELS[state.failure!]} hit zero.`}
               </h2>
               <p>{rankFor(state.score.total)}</p>

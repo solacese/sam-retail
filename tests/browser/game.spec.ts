@@ -1,4 +1,10 @@
 import { test, expect } from "@playwright/test";
+async function freezeClock(page: import("@playwright/test").Page) {
+  // Browser and host clocks can differ slightly, so use an explicit start
+  // and pause one minute later before loading the app.
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:01:00Z"));
+}
 async function openGame(page: import("@playwright/test").Page) {
   await page.goto("?seed=BROWSER-TEST");
   await page.getByRole("button", { name: "Open for business" }).click();
@@ -26,8 +32,7 @@ test("Menu and Event X-Ray preserve the current untimed decision", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.clock.install();
-  await page.clock.pauseAt(new Date());
+  await freezeClock(page);
   await openGame(page);
   const title = await page.locator(".decision-card h2").innerText();
   await page.getByRole("button", { name: "Menu", exact: true }).click();
@@ -52,8 +57,7 @@ test("decisions have no time limit or automatic rejection", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.clock.install();
-  await page.clock.pauseAt(new Date());
+  await freezeClock(page);
   await openGame(page);
   const title = await page.locator(".decision-card h2").innerText();
   await page.clock.fastForward(300000);
@@ -66,8 +70,7 @@ test("keyboard decisions commit and Space pauses when gameplay has focus", async
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.clock.install();
-  await page.clock.pauseAt(new Date());
+  await freezeClock(page);
   await openGame(page);
   await page.locator(".game-main").focus();
   await page.keyboard.press("Space");
@@ -85,8 +88,7 @@ test("six decisions reach the daily report and autonomy unlock", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.clock.install();
-  await page.clock.pauseAt(new Date());
+  await freezeClock(page);
   await openGame(page);
   for (let i = 0; i < 6; i++) {
     await page.getByRole("button", { name: /^Approve:/ }).click();
@@ -191,8 +193,7 @@ for (const [direction, result] of [
 
 test("results remain readable for 4.5 seconds", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.clock.install();
-  await page.clock.pauseAt(new Date());
+  await freezeClock(page);
   await openGame(page);
   await page.getByRole("button", { name: /^Approve:/ }).click();
   await expect(page.getByText("APPROVED", { exact: true })).toBeVisible();

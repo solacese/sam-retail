@@ -1,4 +1,4 @@
-name: Test and deploy Solace Mart to GitHub Pages
+name: Test and deploy ABC Shop to GitHub Pages
 on:
   push:
     branches: [main]

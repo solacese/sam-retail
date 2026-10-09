@@ -1,6 +1,6 @@
-# Solace Mart
+# ABC Shop
 
-A large supermarket, a warehouse, online orders, five helpful agents, and two choices. A Reigns-inspired retail survival game with executable event correlation, cascading consequences, and a deliberately simple interface. All 72 cards use short, plain English. Solace keeps live updates flowing and coordinates bots; the manager decides how to balance cost, service, risk, and incomplete information.
+A large supermarket, a warehouse, online orders, five helpful agents, and two choices. A Reigns-inspired retail survival game with executable event correlation, cascading consequences, and a deliberately simple interface. All 72 cards use short titles, simple sentences, and clear choices. Solace keeps live updates flowing and coordinates bots; the manager decides how to balance cost, service, risk, and incomplete information.
 
 **Play:** https://solacese.github.io/sam-retail/
 

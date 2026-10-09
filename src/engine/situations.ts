@@ -39,530 +39,530 @@ type Copy = [
 const COPY: Record<Family, Copy[]> = {
   "stock": [
     [
-      "Milk before the rush",
-      "Solace shares rising milk sales with Stocky and Penny. Extra supply costs more; the usual truck may arrive in time.",
-      "order extra milk while keeping cash for other bills.",
-      "Order extra milk",
+      "Milk running low",
+      "Solace flags low milk stock. Buying more costs extra, but waiting may leave empty shelves.",
+      "order extra milk.",
+      "Order more milk",
       "Wait for the truck"
     ],
     [
-      "Online orders jump",
-      "Solace updates shelf and online stock together. Pasta demand is rising, but no one knows how long the rush will last.",
-      "order more pasta for shelves and online orders.",
+      "More pasta orders",
+      "Solace updates shop and online stock together. Pasta is selling fast, but the rush may end soon.",
+      "order more pasta.",
       "Order more pasta",
-      "Sell what we have"
+      "Use current stock"
     ],
     [
-      "Fruit for the evening",
-      "Solace sends live fruit sales to the buying bots. Extra pallets prevent shortages, but tomorrow may be quiet.",
-      "buy an extra pallet of fruit before the evening rush.",
-      "Order extra fruit",
-      "Wait for normal supply"
+      "More fruit tonight?",
+      "Solace spots rising fruit sales. More fruit helps today, but any leftovers could spoil tomorrow.",
+      "order more fruit.",
+      "Buy more fruit",
+      "Keep the usual order"
     ],
     [
-      "Breakfast stock alert",
-      "Solace flags low breakfast stock before it runs out. A rush delivery is costly; substitutes are already available.",
-      "refill the breakfast range with a rush delivery.",
-      "Refill the range",
-      "Offer substitutes"
+      "Breakfast stock low",
+      "Solace warns before breakfast products run out. A fast delivery costs more; other brands are already on the shelves.",
+      "order the missing breakfast products.",
+      "Order the products",
+      "Offer other brands"
     ],
     [
-      "Essentials in demand",
-      "Solace gives every stock bot the same live demand. More essentials protect availability, but tie up cash needed elsewhere.",
-      "rush the essentials customers need most.",
-      "Rush the essentials",
-      "Keep cash available"
+      "Basics selling fast",
+      "Solace alerts both agents about low stock. Buying more basics fills shelves, but leaves less money for bills.",
+      "order more basics.",
+      "Buy more basics",
+      "Save the money"
     ],
     [
-      "Reserve stock for pickup",
-      "Solace keeps pickup and shelf stock in sync. More pickup orders may come, but the final count is still unknown.",
-      "buy extra stock to serve pickup and walk-in customers.",
+      "Save stock for pickup?",
+      "Solace keeps pickup and shelf stock updated. More pickup orders may arrive, but buying extra stock costs money.",
+      "buy extra stock for pickup orders.",
       "Buy extra stock",
       "Use current stock"
     ]
   ],
   "supplier": [
     [
-      "A larger dairy order",
-      "Solace brings the supplier offer and storage forecast to both bots. A full truck costs less per item, but needs cash and space.",
-      "buy the larger dairy order and watch sales.",
-      "Buy the larger order",
-      "Keep smaller orders"
+      "A big dairy order",
+      "Solace shares a supplier discount. A bigger dairy order costs less per item, but uses more money and fridge space.",
+      "buy the bigger dairy order.",
+      "Buy the big order",
+      "Buy smaller orders"
     ],
     [
-      "A snack supplier offer",
-      "Solace shares a bulk snack offer with Stocky and Penny. The discount is certain; demand for the new flavor is not.",
-      "buy the batch at the lower price.",
-      "Buy the batch",
-      "Keep regular orders"
+      "Cheap new snacks",
+      "Solace shares a snack discount. A big order is cheap, but we do not know if shoppers will like the new flavor.",
+      "buy the discounted snacks.",
+      "Buy the snacks",
+      "Keep usual orders"
     ],
     [
-      "Coffee prices rising",
-      "Solace shares the new supplier price instantly. Buying coffee now saves money per pack, but locks up cash for weeks.",
-      "buy more coffee before the supplier increase.",
-      "Buy at today’s price",
-      "Keep smaller orders"
+      "Coffee costs more",
+      "Solace shares the supplier’s new prices. Buying coffee now avoids the price rise, but uses money needed for other orders.",
+      "buy coffee before the price rise.",
+      "Buy coffee now",
+      "Buy smaller orders"
     ],
     [
-      "More local produce",
-      "Solace connects the farm offer to live store demand. Local produce is popular, but the farm requires a larger order.",
-      "accept the larger farm order.",
-      "Buy the farm order",
-      "Keep smaller orders"
+      "Local fruit offer",
+      "Solace shares a local farm’s offer. The fruit is popular, but we must buy a larger order to get the discount.",
+      "buy the larger farm order.",
+      "Buy the big order",
+      "Buy smaller orders"
     ],
     [
-      "Warehouse discount",
-      "Solace matches discounted warehouse stock to our sales. Some products sell slowly, and their future demand is unclear.",
-      "buy the discounted stock with a plan to sell it.",
-      "Buy the stock",
-      "Keep cash available"
+      "Cheap warehouse stock",
+      "Solace checks sales before sharing a stock discount. The price is low, but some products may take weeks to sell.",
+      "buy the discounted stock.",
+      "Buy the cheap stock",
+      "Save the money"
     ],
     [
-      "A supplier needs a promise",
-      "Solace shares next month’s supplier offer with the buying bots. A larger order secures stock, but the holiday forecast is uncertain.",
-      "commit to a larger order to secure supply.",
+      "Order for the holidays?",
+      "Solace shares the holiday supply offer. A big order secures stock, but we do not yet know how much shoppers will buy.",
+      "reserve the holiday stock.",
       "Reserve the stock",
       "Buy week by week"
     ]
   ],
   "fraud": [
     [
-      "A return worth checking",
-      "Solace links return records across service desks. One pattern looks unusual, but it could be an honest customer.",
-      "ask staff to check the receipt before refunding.",
+      "Check this return?",
+      "Solace spots an unusual return. Checking the receipt may prevent a loss, but keeps an honest customer waiting.",
+      "check the receipt before refunding.",
       "Check the receipt",
-      "Refund without review"
+      "Give a quick refund"
     ],
     [
-      "An uncertain scan",
-      "Solace routes a checkout alert to Shield. The scan looks unusual, but a staff check will slow a busy lane.",
-      "add a polite staff check at checkout.",
+      "Check this basket?",
+      "Solace flags an unusual checkout scan. A basket check may prevent a loss, but slows the queue.",
+      "ask staff to check the basket.",
       "Check the basket",
-      "Keep the lane moving"
+      "Keep the queue moving"
     ],
     [
-      "Coupon exception",
-      "Solace blocks reused coupon codes across all channels. A shopper asks for a goodwill credit, but has no proof of the original purchase.",
-      "verify the purchase before granting a credit.",
-      "Ask for purchase proof",
-      "Grant a small credit"
+      "A coupon complaint",
+      "Solace blocks a used coupon. The shopper asks for a small credit, but has no receipt to support the request.",
+      "ask for the receipt first.",
+      "Ask for the receipt",
+      "Give a small credit"
     ],
     [
-      "Large gift card refund",
-      "Solace joins purchase and refund events for Shield. The request looks unusual, but the customer’s explanation could be true.",
-      "review the refund with a manager.",
+      "A large refund",
+      "Solace links the purchase and refund. The request looks unusual, but the customer may have a good reason.",
+      "ask a manager to review the refund.",
       "Review the refund",
-      "Refund without review"
+      "Give a quick refund"
     ],
     [
-      "Protect the display",
-      "Solace shares live stock and security signals with Shield. A guarded electronics display reduces risk, but makes browsing slower.",
-      "add staff checks around the electronics display.",
-      "Add display checks",
+      "Protect the electronics",
+      "Solace shares live stock and risk alerts. Extra checks may reduce theft, but make shopping slower.",
+      "add staff checks at the display.",
+      "Add staff checks",
       "Keep easy browsing"
     ],
     [
-      "A courier handoff",
-      "Solace gives the courier and store bots the same order status. A name differs on the pickup ID, and the queue is growing.",
-      "verify the courier’s authority before handing over the order.",
-      "Verify the pickup ID",
-      "Allow the handoff"
+      "Check the courier?",
+      "Solace shares the order status with both teams. The courier’s ID has a different name, and customers are waiting.",
+      "check the courier’s ID.",
+      "Check the ID",
+      "Allow the pickup"
     ]
   ],
   "review": [
     [
-      "A missing item claim",
-      "Solace confirms the order and handoff records. A customer reports a missing item; what happened after delivery is unclear.",
-      "refund the disputed item as a goodwill gesture.",
+      "An item is missing?",
+      "Solace confirms a complete delivery handoff. A customer says an item is missing, but we cannot confirm what happened next.",
+      "refund the disputed item.",
       "Refund the item",
-      "Explain our policy"
+      "Ask for proof"
     ],
     [
-      "A warm delivery claim",
-      "Solace shares the cold-chain readings and delivery time. A customer says food arrived warm, but the final doorstep reading is unknown.",
-      "replace the disputed order as a goodwill gesture.",
+      "Food arrived warm?",
+      "Solace shares the delivery’s temperature checks. A customer says the food arrived warm, but the final temperature is unknown.",
+      "replace the customer’s order.",
       "Replace the order",
-      "Explain the readings"
+      "Ask for proof"
     ],
     [
-      "Yesterday’s price",
-      "Solace updates shelf, checkout, and online prices together. Yesterday’s buyers now want the same discount; honoring it will cost money.",
-      "offer yesterday’s buyers a goodwill refund.",
+      "Yesterday’s shoppers",
+      "Solace keeps shop and online prices the same. Yesterday’s shoppers want today’s discount too, but refunds cost money.",
+      "refund yesterday’s price difference.",
       "Refund the difference",
       "Keep the sale policy"
     ],
     [
-      "Pickup went to plan",
-      "Solace coordinates the pickup bots and confirms a complete handoff. A customer later reports a missing bag; proof is incomplete.",
-      "replace the disputed items to protect customer trust.",
+      "A missing pickup bag?",
+      "Solace confirms all bags were handed over. A customer later reports one missing, but has no proof.",
+      "replace the missing items.",
       "Replace the items",
-      "Explain our policy"
+      "Ask for proof"
     ],
     [
-      "Customers want faster help",
-      "Solace routes customer questions to the right bots immediately. Human review takes time, and extra staff would cut the wait.",
-      "fund extra support for cases that need a person.",
-      "Add human support",
-      "Keep current staffing"
+      "Faster customer help",
+      "Solace sends questions to the right agents. Some still need a person, and hiring more staff costs money.",
+      "add staff to help customers.",
+      "Add support staff",
+      "Use current staff"
     ],
     [
-      "A substitute disappoints",
-      "Solace tells the picker and customer bots about a stock change. A shopper accepted a substitute but now wants a refund.",
-      "refund the substitute as a goodwill gesture.",
-      "Refund the substitute",
+      "A different brand",
+      "Solace updates the order with an agreed replacement. The shopper now dislikes it and wants their money back.",
+      "refund the replacement item.",
+      "Refund the item",
       "Keep the agreed sale"
     ]
   ],
   "promotion": [
     [
       "A quiet afternoon",
-      "Solace shares live sales and spare stock with Spark. A quick offer could bring shoppers in, but lowers the margin per item.",
-      "run an afternoon offer across store and online channels.",
-      "Start the offer",
+      "Solace shows slow sales and spare stock. A discount may bring more shoppers, but we earn less on each item.",
+      "start an afternoon discount.",
+      "Start the discount",
       "Keep normal prices"
     ],
     [
-      "An evening meal deal",
-      "Solace coordinates bundle prices across every channel. A meal deal may sell more stock, but demand could stay quiet.",
-      "launch the meal bundle across the food departments.",
-      "Launch the meal deal",
+      "A meal deal",
+      "Solace keeps meal-deal prices updated everywhere. A deal may sell more food, but we earn less per item.",
+      "start the meal deal.",
+      "Start the meal deal",
       "Keep normal prices"
     ],
     [
       "Office lunch orders",
-      "Solace connects office enquiries to stock and kitchen bots. A lunch offer could win business, but strains the same stock shoppers need.",
-      "launch the lunch deal with stock reserved for office orders.",
-      "Launch the lunch deal",
+      "Solace connects lunch orders to stock. A deal could win office customers, but leaves less food for other shoppers.",
+      "start a lunch deal for offices.",
+      "Start the lunch deal",
       "Keep normal sales"
     ],
     [
-      "A regional campaign",
-      "Solace gives marketing and stock bots the same live plan. A campaign could grow sales, but how many shoppers will come is unclear.",
-      "launch the campaign and prepare the teams.",
-      "Launch the campaign",
-      "Skip the campaign"
+      "Advertise the shop?",
+      "Solace shares the sales plan with all agents. Advertising may bring shoppers, but we do not know how many.",
+      "start the advertising campaign.",
+      "Run the adverts",
+      "Skip the adverts"
     ],
     [
-      "A busy event weekend",
-      "Solace shares event forecasts with pricing and stock bots. A snack offer could raise sales, but the crowd size is uncertain.",
-      "run a snack and drink offer for the event.",
-      "Start the event offer",
+      "A busy weekend?",
+      "Solace shares the local event forecast. A snack offer could sell well, but the number of visitors is uncertain.",
+      "start a weekend snack offer.",
+      "Start the snack offer",
       "Keep normal prices"
     ],
     [
-      "Match a rival’s offer",
-      "Solace can update every price and order channel together. A rival cuts prices; matching them protects sales but reduces margin.",
-      "match the rival’s offer across all channels.",
-      "Match the offer",
-      "Protect our margin"
+      "A rival cuts prices",
+      "Solace can change all our prices together. Matching a rival may keep shoppers, but we earn less per sale.",
+      "match the rival’s prices.",
+      "Match their prices",
+      "Keep our prices"
     ]
   ],
   "staff": [
     [
-      "A queue needs people",
-      "Solace sends live queue counts to Sam and Penny. More checkout staff cut waiting, but use cash set aside for stock.",
-      "add staff to open more checkout lanes.",
+      "Long checkout queues",
+      "Solace tells the team where queues are growing. More staff reduce waiting, but leave less money for stock.",
+      "add checkout staff.",
       "Add checkout staff",
-      "Use the current team"
+      "Use current staff"
     ],
     [
-      "Cover the busy shift",
-      "Solace coordinates checkout and pickup tasks in real time. Extra cover eases the workload, but the rush may end soon.",
-      "pay for extra shift cover during the busy period.",
-      "Add shift cover",
-      "Use the current team"
+      "A busy shift",
+      "Solace coordinates checkout and pickup work. Extra staff ease the pressure, but the rush may end soon.",
+      "pay for extra staff.",
+      "Add more staff",
+      "Use current staff"
     ],
     [
-      "Time for training",
-      "Solace routes tasks to the right bots and staff. New staff still need human coaching, which costs another paid shift.",
-      "fund a training shift for the new team.",
-      "Add a training shift",
-      "Coach during the shift"
+      "Train the new team",
+      "Solace assigns jobs to the team. New staff need training, but a separate training shift costs money.",
+      "pay for a training shift.",
+      "Pay for training",
+      "Train while working"
     ],
     [
-      "Weekend staffing choice",
-      "Solace shares a live weekend forecast with staffing bots. It looks busy, but the estimate may change after the weather report.",
-      "book extra shifts before the weekend.",
-      "Book extra shifts",
-      "Use the current team"
+      "More weekend staff?",
+      "Solace shares the latest sales forecast. The weekend looks busy, but bad weather could keep shoppers away.",
+      "book extra weekend staff.",
+      "Book extra staff",
+      "Use current staff"
     ],
     [
-      "Pickup or checkout",
-      "Solace directs pickup bots to ready orders. Human handoffs are busy; borrowing checkout staff would lengthen those queues.",
-      "add paid cover at the pickup area.",
+      "Pickup or checkout?",
+      "Solace tells the team which orders are ready. Pickup needs help, but moving checkout staff will make those queues longer.",
+      "hire extra pickup staff.",
       "Add pickup staff",
-      "Share checkout staff"
+      "Move checkout staff"
     ],
     [
-      "Late orders, tired staff",
-      "Solace coordinates the last picking jobs across the bots. Paid overtime protects pickup times, but increases costs and staff fatigue.",
-      "offer a paid extra shift for the late orders.",
-      "Pay for extra cover",
-      "Finish with this team"
+      "Late orders to finish",
+      "Solace coordinates the final picking jobs. Extra paid staff can finish sooner, but the budget is tight.",
+      "pay for extra help.",
+      "Pay for extra staff",
+      "Use current staff"
     ]
   ],
   "waste": [
     [
-      "Ripe fruit decision",
-      "Solace shares live freshness readings with pricing bots. A markdown sells fruit sooner; keeping the price may earn more or leave waste.",
-      "discount ripe fruit while it is fresh.",
+      "Ripe fruit",
+      "Solace flags fruit nearing its last selling day. A discount reduces waste, but we earn less per item.",
+      "discount the ripe fruit.",
       "Discount the fruit",
       "Keep full prices"
     ],
     [
-      "Bread before closing",
-      "Solace can update bread prices in every channel together. A markdown clears surplus, but some full-price shoppers may buy less tomorrow.",
-      "offer discounted bread bundles before closing.",
+      "Bread left over",
+      "Solace can update bread prices everywhere. A discount sells today’s bread, but shoppers may expect cheap bread tomorrow too.",
+      "discount the leftover bread.",
       "Discount the bread",
       "Keep full prices"
     ],
     [
-      "Dairy nearing its date",
-      "Solace links use-by dates to live sales. Discounting dairy reduces waste, but regular shoppers may wait for cheaper stock next time.",
-      "discount dairy while it is safe to sell.",
+      "Dairy dates are close",
+      "Solace shares the dairy use-by dates. A discount cuts waste, but some shoppers may stop buying at full price.",
+      "discount the dairy products.",
       "Discount the dairy",
       "Keep full prices"
     ],
     [
-      "Too much fresh stock",
-      "Solace shares the same freshness and stock view with all bots. A markdown frees space, but demand might rise later today.",
-      "discount the extra fresh stock now.",
-      "Discount extra stock",
+      "Too much fresh food",
+      "Solace flags extra fresh stock. A discount sells it sooner, but more full-price shoppers may arrive later.",
+      "discount the extra fresh food.",
+      "Discount it now",
       "Wait for more sales"
     ],
     [
-      "Food rescue boxes",
-      "Solace coordinates fresh stock, pricing, and pickup bots. Cheap rescue boxes cut waste, but may replace full-price orders.",
-      "sell discounted boxes of safe fresh food.",
-      "Sell food boxes",
+      "Cheap food boxes",
+      "Solace coordinates spare food and pickup orders. Cheap boxes cut waste, but may replace full-price sales.",
+      "sell discounted food boxes.",
+      "Sell cheap food boxes",
       "Keep normal sales"
     ],
     [
-      "One price for ripe stock",
-      "Solace can publish a ripe-stock markdown to labels, tills, and online orders together. It saves food but reduces today’s margin.",
-      "apply the markdown across all channels.",
-      "Publish the markdown",
+      "Discount ripe stock?",
+      "Solace updates shelf, checkout, and online prices together. Discounting ripe food saves waste, but lowers profit per item.",
+      "discount the ripe stock everywhere.",
+      "Discount the stock",
       "Keep full prices"
     ]
   ],
   "equipment": [
     [
-      "A freezer needs service",
-      "Solace routes rising freezer readings to the stock and maintenance bots. Early repairs protect stock, but an urgent visit costs more.",
-      "book urgent freezer maintenance.",
-      "Service the freezer",
-      "Monitor until service"
+      "Service the freezer?",
+      "Solace alerts the team to warmer freezer readings. Urgent service protects food, but costs more than a planned visit.",
+      "book urgent freezer service.",
+      "Service it now",
+      "Monitor and wait"
     ],
     [
-      "A robot needs a battery",
-      "Solace reroutes picking jobs around a robot with a worn battery. Replacing it restores capacity; the other bots can cover at a slower pace.",
-      "replace the robot battery now.",
-      "Replace the battery",
+      "A tired robot battery",
+      "Solace moves jobs to other robots. A new battery restores speed, but using fewer robots saves money.",
+      "replace the robot battery.",
+      "Buy a new battery",
       "Use fewer robots"
     ],
     [
-      "An older camera",
-      "Solace delivers the camera’s health alert to Shield. A new camera improves coverage, but staff patrols could cover the area for now.",
+      "Replace the camera?",
+      "Solace flags an aging camera. A new one improves security, but staff can check the area for now.",
       "replace the aging camera.",
-      "Replace the camera",
-      "Use staff patrols"
+      "Buy a new camera",
+      "Use staff checks"
     ],
     [
-      "Service the loading door",
-      "Solace coordinates safe loading slots around a worn door motor. Repairing it now takes money and closes one bay for an hour.",
-      "repair the loading door during a planned slot.",
+      "Repair the loading door",
+      "Solace routes deliveries to the other loading door. A repair costs money, but using one door slows unloading.",
+      "repair the loading door.",
       "Repair the door",
-      "Use the other bay"
+      "Use the other door"
     ],
     [
-      "Cooling maintenance",
-      "Solace shares cooling readings with maintenance and stock bots. An early service visit reduces risk, but the normal visit is tomorrow.",
-      "bring the cooling service forward.",
-      "Service cooling now",
+      "Cooling needs service",
+      "Solace shares warmer cooling readings. An early service visit reduces risk, but the usual visit is tomorrow.",
+      "service the cooling system today.",
+      "Service it today",
       "Monitor until tomorrow"
     ],
     [
-      "More charging space",
-      "Solace coordinates robot charging so picking continues. More charging bays improve capacity, but take space and cash from stock storage.",
-      "add charging bays for the picking robots.",
-      "Add charging bays",
-      "Keep staggered charging"
+      "More robot chargers?",
+      "Solace schedules charging so robots keep working. Extra chargers speed things up, but cost money and storage space.",
+      "buy more robot chargers.",
+      "Buy more chargers",
+      "Take turns charging"
     ]
   ],
   "delivery": [
     [
-      "A late warehouse truck",
-      "Solace shares the truck’s new arrival time with shelf and pickup bots. Backup supply is quicker, but costs more than waiting.",
-      "use backup supply before the rush.",
-      "Use backup supply",
+      "The truck is late",
+      "Solace tells all agents when the truck will arrive. Another supplier is faster, but costs more.",
+      "order from another supplier.",
+      "Use another supplier",
       "Wait for the truck"
     ],
     [
-      "Storm on the route",
-      "Solace reroutes delivery updates to every store bot. A backup truck avoids the storm, but its fee is high and demand is uncertain.",
-      "book a backup delivery on the safer route.",
-      "Book the backup truck",
-      "Wait for the shipment"
+      "A storm slows trucks",
+      "Solace shares the latest delivery times. A backup truck can arrive sooner, but its delivery fee is high.",
+      "book the backup truck.",
+      "Book another truck",
+      "Wait for the delivery"
     ],
     [
-      "Borrow another store’s stock",
-      "Solace matches our low stock to a nearby store’s surplus. A transfer helps today, but costs money and leaves that store less cover.",
-      "arrange the nearby stock transfer.",
+      "Borrow nearby stock?",
+      "Solace finds spare stock at a nearby shop. Moving it helps us today, but costs money and leaves that shop less stock.",
+      "transfer the nearby stock.",
       "Transfer the stock",
-      "Wait for normal supply"
+      "Wait for our delivery"
     ],
     [
-      "A short supplier shipment",
-      "Solace shares the supplier’s confirmed short shipment before arrival. Backup stock costs more; selling substitutes protects cash.",
-      "buy replacement stock from a backup supplier.",
+      "The supplier sends less",
+      "Solace warns us before the short delivery arrives. Replacement stock costs more, but shoppers may accept another brand.",
+      "buy replacement stock.",
       "Buy replacement stock",
-      "Offer substitutes"
+      "Offer other brands"
     ],
     [
-      "Two trucks running late",
-      "Solace keeps all bots updated on two delayed trucks. Backup supply protects availability, but there is only enough cash for a small order.",
-      "order backup stock for the busiest departments.",
-      "Use backup supply",
-      "Wait and save cash"
+      "Two late trucks",
+      "Solace keeps every agent updated on the delays. Backup stock fills shelves sooner, but we can only afford a small order.",
+      "buy a small backup order.",
+      "Buy backup stock",
+      "Wait and save money"
     ],
     [
-      "Last urgent delivery slot",
-      "Solace finds one urgent delivery slot and shares it with both buying bots. Taking it protects our stock, but costs more than tomorrow’s route.",
-      "reserve the urgent delivery slot.",
-      "Book the urgent slot",
+      "One fast delivery left",
+      "Solace finds one fast delivery slot. Taking it helps us today, but tomorrow’s delivery is cheaper.",
+      "book the fast delivery.",
+      "Book it today",
       "Wait until tomorrow"
     ]
   ],
   "cash": [
     [
-      "Large bills due",
-      "Solace shares current cash and stock with Penny and Stocky. Clearing slow products pays bills, but leaves less choice for shoppers.",
-      "discount slow stock to free cash for bills.",
-      "Clear slow stock",
+      "Bills need paying",
+      "Solace shares the latest money and stock totals. Discounting slow products pays the bills, but leaves shoppers less choice.",
+      "discount slow-selling products.",
+      "Sell slow stock cheaply",
       "Keep the full range"
     ],
     [
-      "Costs rising",
-      "Solace brings supplier costs and sales into one live view. Clearing slow items frees cash, but may disappoint their loyal buyers.",
-      "clear slow products to protect available cash.",
-      "Clear slow products",
+      "Costs are rising",
+      "Solace shares new costs with both agents. Selling slow products cheaply frees money, but some regular shoppers want that range.",
+      "discount slow-selling products.",
+      "Discount slow stock",
       "Keep the full range"
     ],
     [
-      "Supplier invoices due",
-      "Solace shares the invoice schedule with both buying bots. A stock clearance frees cash, but sacrifices some future full-price sales.",
-      "sell slow stock to pay the invoices.",
-      "Free cash from stock",
+      "Supplier bills are due",
+      "Solace shows when supplier bills must be paid. Selling stock cheaply frees money, but loses possible full-price sales.",
+      "discount stock to pay the bills.",
+      "Sell stock cheaply",
       "Keep the stock"
     ],
     [
-      "Cash tied up in stock",
-      "Solace shows which stock sells slowly across all channels. A clearance makes room for new orders, but reduces the available range.",
-      "run a clearance on slow-selling products.",
-      "Clear slow stock",
+      "Money stuck in stock",
+      "Solace shows which products sell slowly. Discounts free money for new orders, but reduce our product range.",
+      "discount slow-selling products.",
+      "Discount slow stock",
       "Wait for normal sales"
     ],
     [
-      "Payroll approaching",
-      "Solace updates the cash forecast as orders arrive. Clearing stock protects payroll cash, but demand for those products could rebound.",
-      "sell slow stock before payroll.",
-      "Clear slow stock",
+      "Payday is close",
+      "Solace updates the money forecast. Cheap stock sales help pay wages, but demand for those products might rise later.",
+      "sell slow stock before payday.",
+      "Sell stock cheaply",
       "Wait for full-price sales"
     ],
     [
-      "A new range or more cash",
-      "Solace shares live sales for a trial range with Penny and Stocky. Clearing it funds essentials, but the trial may need more time.",
-      "clear the trial range to fund essentials.",
-      "Clear the trial range",
-      "Give the range time"
+      "Keep the new products?",
+      "Solace shares sales of our new products. Dropping them frees money for basics, but shoppers may need time to try them.",
+      "discount the new products to free money.",
+      "Sell them cheaply",
+      "Give them more time"
     ]
   ],
   "loyalty": [
     [
-      "Reward repeat shoppers",
-      "Solace links repeat visits across store and online orders. A reward may bring people back, but its future value is uncertain.",
-      "offer an affordable reward for repeat shoppers.",
-      "Offer customer rewards",
-      "Keep the cash"
+      "Reward regular shoppers",
+      "Solace spots regular shoppers across shop and online orders. Rewards may bring them back, but cost money today.",
+      "offer regular shoppers a reward.",
+      "Offer a reward",
+      "Save the money"
     ],
     [
-      "Member birthday offers",
-      "Solace coordinates birthday offers and redemptions across all channels. More rewards build trust, but add cost without guaranteed visits.",
-      "offer a small birthday reward to members.",
-      "Offer birthday rewards",
-      "Skip the reward cost"
+      "Birthday discounts",
+      "Solace applies birthday offers across all channels. Discounts may bring members back, but another visit is not guaranteed.",
+      "offer birthday discounts.",
+      "Offer birthday discounts",
+      "Skip the discount cost"
     ],
     [
-      "Reusable bag rewards",
-      "Solace shares bag choices with checkout and pickup bots. Rewards encourage reuse, but cost money on orders we might have won anyway.",
-      "reward customers who use reusable bags.",
       "Reward reusable bags",
-      "Keep current pricing"
+      "Solace tracks bags at checkout and pickup. A reward encourages reuse, but pays shoppers who may already bring bags.",
+      "reward reusable bags.",
+      "Reward reusable bags",
+      "Keep current prices"
     ],
     [
-      "A customer tasting day",
-      "Solace coordinates tasting stock and event bookings. A tasting day may bring shoppers back, but needs stock and paid staff.",
-      "host a tasting day across food departments.",
-      "Host the tasting day",
+      "Try before buying",
+      "Solace coordinates tasting stock and bookings. Free tastings may win customers, but need food and paid staff.",
+      "host a food tasting.",
+      "Host a tasting",
       "Skip the event cost"
     ],
     [
-      "More local products",
-      "Solace shares customer requests with buying bots. A local range could build loyalty, but needs spending before demand is proven.",
-      "fund a small local-products area.",
-      "Fund the local range",
+      "Sell more local food?",
+      "Solace shares requests for local products. Adding them may keep shoppers happy, but sales are not yet proven.",
+      "add a small local food range.",
+      "Add local products",
       "Keep the current range"
     ],
     [
-      "A delivery fee reward",
-      "Solace coordinates loyalty benefits with delivery bots. Free delivery for regular shoppers may keep them loyal, but every trip still costs us.",
-      "fund a delivery reward for regular shoppers.",
+      "Free delivery reward",
+      "Solace shares delivery rewards with the order agents. Free delivery may keep regular shoppers, but each trip still costs us money.",
+      "offer free delivery to regular shoppers.",
       "Offer free delivery",
       "Keep delivery fees"
     ]
   ],
   "resilience": [
     [
-      "A busy day needs cover",
-      "Solace routes live queue and stock alerts to the right bots. Extra human cover helps them act, but reduces cash for tomorrow.",
-      "fund backup support for the busy teams.",
-      "Add backup support",
-      "Use the current team"
+      "Extra help today?",
+      "Solace sends live alerts to the right agents. More staff help with the rush, but leave less money for tomorrow.",
+      "pay for extra support staff.",
+      "Add more staff",
+      "Use current staff"
     ],
     [
-      "A forecast with gaps",
-      "Solace joins sales, queue, and security events for the bots. Tomorrow’s demand is still uncertain; backup cover could go unused.",
-      "fund backup support before the rush.",
-      "Add backup support",
-      "Keep cash available"
+      "How busy tomorrow?",
+      "Solace shares the latest sales and queue data. Extra staff prepare us for a rush, but tomorrow may be quiet.",
+      "book extra staff for tomorrow.",
+      "Book extra staff",
+      "Save the money"
     ],
     [
-      "A robot traffic plan",
-      "Solace coordinates picking robots around a crowded aisle. Extra floor support keeps paths clear, but takes money from other departments.",
-      "add floor support for the coordinated robot routes.",
-      "Add floor support",
-      "Use current cover"
+      "Robots in a busy aisle",
+      "Solace guides robots around shoppers. Extra floor staff keep paths clear, but cost money needed elsewhere.",
+      "add staff to help in the aisle.",
+      "Add floor staff",
+      "Use current staff"
     ],
     [
-      "Returns during a rush",
-      "Solace links unusual returns with growing queues and alerts both bots. Extra support reduces risk, but adds cost before anything is proven.",
-      "add a shared support team for returns and checkout.",
-      "Add shared support",
-      "Use current cover"
+      "Returns in a rush",
+      "Solace alerts both teams to unusual returns and long queues. Extra help reduces risk, but costs money before we know more.",
+      "add staff for returns and checkout.",
+      "Add more staff",
+      "Use current staff"
     ],
     [
-      "Several priorities at once",
-      "Solace coordinates stock, pickup, and security bots from one live view. Extra support helps all three, but the budget is tight.",
-      "fund a shared support shift for the busiest teams.",
-      "Fund shared support",
-      "Keep cash available"
+      "Three busy teams",
+      "Solace coordinates stock, pickup, and security work. Extra staff help all three teams, but we have little money to spare.",
+      "pay for extra support staff.",
+      "Add shared staff",
+      "Save the money"
     ],
     [
-      "Crowds or a quiet day",
-      "Solace shares weather, sales, and queue updates with every bot. Two forecasts disagree; backup support buys cover that may not be needed.",
-      "book backup cover while availability is certain.",
-      "Book backup cover",
-      "Wait for a clearer forecast"
+      "Will the crowd come?",
+      "Solace shares the latest sales and weather data. Extra staff cover a possible rush, but the forecasts disagree.",
+      "book extra staff while they are available.",
+      "Book extra staff",
+      "Wait for more information"
     ]
   ]
 };
@@ -773,7 +773,7 @@ const PROFILES: Record<
     peer: "PENNY",
     approve: fx(
       [0, 12, 3, -9],
-      "Solace coordinates the response. Extra support reduces risk, but uses cash.",
+      "Solace keeps the teams updated. Extra help reduces risk, but costs money.",
       {
         fraud: -0.5,
         equipment: 8,
@@ -781,10 +781,10 @@ const PROFILES: Record<
     ),
     reject: fx(
       [0, -7, 1, 5],
-      "Solace keeps routing live updates. Current teams carry more risk while cash is preserved.",
+      "Solace keeps the teams updated. We save money, but current staff face more pressure.",
       { fraud: 0.6 },
     ),
-    opinion: "Solace has joined the live signals. Extra support helps the teams act on them.",
+    opinion: "Solace shares the latest updates. Extra staff help the teams act on them.",
     peerOpinion: "Backup support costs money. Spend only what we need.",
   },
 };

@@ -203,7 +203,7 @@ export function Shop({
       viewBox="0 0 600 465"
       className={`shop-scene ${hero ? "hero-scene" : ""}`}
       role="img"
-      aria-label={`MiniMart shop. Inventory ${Math.round(inventory)}%, ${crowd} shoppers${delivery ? ", delivery on the way" : ""}.`}
+      aria-label={`ABC Shop. Inventory ${Math.round(inventory)}%, ${crowd} shoppers${delivery ? ", delivery on the way" : ""}.`}
     >
       <defs>
         <linearGradient id={`${id}ground`} x1="0" x2="1" y1="0" y2="1">
@@ -262,7 +262,7 @@ export function Shop({
         fontFamily="Arial, sans-serif"
         letterSpacing="3"
       >
-        MINIMART
+        ABC SHOP
       </text>
       <path d="m163 252 210-74 0 14-210 75z" fill="#2b7869" />
       {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
