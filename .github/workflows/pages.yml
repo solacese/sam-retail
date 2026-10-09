@@ -1,4 +1,4 @@
-name: Test and deploy MiniMart to GitHub Pages
+name: Test and deploy Solace Mart to GitHub Pages
 on:
   push:
     branches: [main]
@@ -21,7 +21,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:e2e
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       # Prepare the same Pages tar directly: upload-pages-artifact's nested

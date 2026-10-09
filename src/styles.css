@@ -2474,3 +2474,325 @@ svg {
   font-size: 15px;
   line-height: 1.4;
 }
+/* One screen of play. Secondary information belongs in the menu. */
+:root {
+  --ui-body: 16px;
+  --ui-label: 13px;
+  --ui-title: 24px;
+}
+.app-shell {
+  height: 100dvh;
+  min-height: 100dvh;
+  padding: max(8px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-right));
+  gap: 10px;
+  font-size: var(--ui-body);
+}
+.site-header {
+  height: 52px;
+  flex: 0 0 52px;
+}
+.wordmark {
+  font-size: 28px;
+  font-weight: 750;
+  letter-spacing: -1px;
+}
+.lobby,
+.game-main {
+  width: min(430px, 100%);
+  max-width: 430px;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+}
+.resources-bar {
+  margin: 0 4px;
+  gap: 24px;
+  flex: 0 0 42px;
+}
+.resource-icon > svg {
+  width: 26px;
+  height: 26px;
+}
+.resource-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.resource-track {
+  height: 5px;
+  margin-top: 10px;
+}
+.day-line {
+  margin: 0 3px;
+  font-size: var(--ui-label);
+  letter-spacing: 0;
+  flex: 0 0 20px;
+}
+.day-line > span:last-child {
+  font-size: var(--ui-label);
+}
+.lobby > .card-stack,
+.game-main > .card-stack {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin: 0 3px;
+}
+.decision-card,
+.welcome-card,
+.result-card {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.portrait-scene,
+.welcome-scene {
+  height: auto;
+  min-height: 100px;
+  flex: 1;
+}
+.portrait-title {
+  padding: 9px 12px;
+  font-family: Manrope, sans-serif;
+  font-size: var(--ui-label);
+}
+.portrait-title > strong {
+  font-size: var(--ui-label);
+  letter-spacing: 0.7px;
+}
+.portrait-title > span {
+  font: inherit;
+  font-size: var(--ui-label);
+  font-style: normal;
+}
+.card-copy,
+.welcome-card > .card-copy {
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 18px;
+}
+.card-copy > h2,
+.card-copy > h1,
+.result-card > h2,
+.report-card > h2,
+.end-card > h2 {
+  font-family: Manrope, sans-serif;
+  font-size: var(--ui-title);
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.6px;
+  margin-top: 0;
+}
+.card-copy > p,
+.decision-card .card-copy > p,
+.welcome-card > .card-copy > p,
+.result-card > p {
+  font-size: var(--ui-body);
+  line-height: 1.5;
+  margin-top: 10px;
+  color: #586d50;
+}
+.decision-buttons {
+  flex: 0 0 auto;
+  margin: 0 3px;
+  gap: 12px;
+}
+.choice {
+  min-height: 64px;
+  padding: 12px;
+}
+.choice > strong {
+  font-family: Manrope, sans-serif;
+  font-size: var(--ui-body);
+  line-height: 1.3;
+  font-weight: 600;
+  margin: 0;
+  min-height: 0;
+}
+.start-button {
+  margin-top: 0;
+  min-height: 52px;
+  flex: 0 0 auto;
+  font-size: var(--ui-body);
+}
+.site-footer,
+.game-main ~ .site-footer {
+  width: min(430px, 100%);
+  flex: 0 0 44px;
+  margin: 0 auto;
+  padding: 0;
+  justify-content: space-between;
+  letter-spacing: 0;
+}
+.site-footer > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 6px 8px;
+  font-size: var(--ui-body);
+  color: #acbea1;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.result-card {
+  justify-content: center;
+  padding: 24px;
+}
+.result-card .character-name {
+  font-size: var(--ui-label);
+}
+.report-card,
+.end-card {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+.modal {
+  font-size: var(--ui-body);
+  max-height: calc(100dvh - 32px);
+  padding: 20px;
+}
+.modal-top {
+  margin-bottom: 18px;
+}
+.modal-top > .eyebrow {
+  font-size: var(--ui-body);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.modal .icon-button {
+  width: 44px;
+  height: 44px;
+}
+.modal > h2 {
+  font-family: Manrope, sans-serif;
+  font-size: var(--ui-title);
+  font-weight: 650;
+}
+.modal > p,
+.modal .primary-button,
+.tutorial-list,
+.tutorial-list li,
+.modal .fine-print {
+  font-size: var(--ui-body);
+  line-height: 1.5;
+}
+.menu-card-details {
+  margin-top: 18px;
+}
+.menu-card-details h3 {
+  font-size: 18px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+.menu-card-details .card-technical {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-color: #577152;
+}
+.menu-card-details .technical-events,
+.menu-card-details .technical-events > span,
+.menu-card-details .technical-events > code,
+.menu-card-details .technical-agent,
+.menu-card-details .technical-agent > span {
+  font-size: var(--ui-body);
+  line-height: 1.5;
+  color: #c4d0b5;
+}
+.game-menu {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+}
+.game-menu > button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 14px;
+  min-height: 52px;
+  font-size: var(--ui-body);
+  background: #36533c;
+  border-radius: 6px;
+}
+.game-menu > button:hover {
+  background: #446849;
+}
+@media (max-width: 360px) {
+  :root {
+    --ui-title: 22px;
+  }
+  .app-shell {
+    gap: 8px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .site-header {
+    flex-basis: 44px;
+    height: 44px;
+  }
+  .lobby,
+  .game-main {
+    gap: 8px;
+  }
+  .card-copy,
+  .welcome-card > .card-copy {
+    padding: 14px;
+  }
+  .portrait-scene,
+  .welcome-scene {
+    min-height: 80px;
+  }
+  .choice {
+    padding: 10px;
+    min-height: 60px;
+  }
+}
+@media (max-height: 540px) {
+  .app-shell {
+    height: auto;
+    min-height: 100dvh;
+  }
+  .portrait-scene,
+  .welcome-scene {
+    flex: 0 0 140px;
+  }
+}
+.modal:has(.game-menu) .modal-top > .eyebrow {
+  font-size: var(--ui-title);
+  font-weight: 650;
+}
+.menu-card-details > summary {
+  cursor: pointer;
+  min-height: 52px;
+  padding: 14px;
+  font-size: var(--ui-body);
+  border: 1px solid #577152;
+  border-radius: 6px;
+}
+.menu-card-details h3 {
+  margin-top: 16px;
+}

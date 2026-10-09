@@ -22,13 +22,14 @@ test("mobile and desktop launch a single-card game without overflow", async ({
   expect(sizes.bottom).toBeLessThan(sizes.height);
   expect(errors).toEqual([]);
 });
-test("pause and Event X-Ray preserve the current untimed decision", async ({
+test("Menu and Event X-Ray preserve the current untimed decision", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.clock.install();
   await page.clock.pauseAt(new Date());
   await openGame(page);
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page
     .getByRole("button", { name: "Why this card?", exact: true })
     .click();
@@ -37,12 +38,13 @@ test("pause and Event X-Ray preserve the current untimed decision", async ({
   await expect(page.locator(".xray-events code").first()).toBeVisible();
   await page.clock.fastForward(300000);
   await page.getByRole("button", { name: "Back to the decision" }).click();
-  await page.getByRole("button", { name: "Pause game" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Take a breather." }),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page.clock.fastForward(300000);
-  await page.getByRole("button", { name: "Resume", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Menu", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await expect(page.getByRole("button", { name: "Pause game" })).toHaveCount(0);
   await expect(page.locator(".turn-dots")).toHaveAttribute(
     "aria-label",
     "Decision 1 of 6",
@@ -105,7 +107,10 @@ test("six decisions reach the daily report and autonomy unlock", async ({
     "aria-label",
     "Decision 1 of 6",
   );
-  await page.getByRole("button", { name: "Shop", exact: true }).click();
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Your operation", exact: true })
+    .click();
   await expect(
     page.getByRole("button", { name: "Delegate bounded low-risk actions" }),
   ).toBeEnabled();
@@ -113,13 +118,17 @@ test("six decisions reach the daily report and autonomy unlock", async ({
 test("event stream and shop are optional panels", async ({ page }) => {
   await openGame(page);
   await expect(page.locator(".event-panel")).toHaveCount(0);
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page.getByRole("button", { name: "Events", exact: true }).click();
   await expect(page.locator(".event-row")).not.toHaveCount(0);
   await expect(
     page.getByText("decision/proposed", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Close dialog" }).click();
-  await page.getByRole("button", { name: "Shop", exact: true }).click();
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Your operation", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Your retail operation." }),
   ).toBeVisible();
@@ -209,14 +218,15 @@ test("small viewport and reduced-motion preferences remain playable", async ({
   await expect(page.getByText("REJECTED", { exact: true })).toBeVisible();
 });
 
-test("choices show only their labels and cards show technical context", async ({
-  page,
-}) => {
+test("plain choices keep technical details in the menu", async ({ page }) => {
   await openGame(page);
   const choices = page.locator(".choice");
   await expect(choices.locator(".option-effects")).toHaveCount(0);
   await expect(choices.locator("strong")).toHaveCount(2);
   await expect(page.locator(".resource>small")).toHaveCount(0);
+  await expect(page.locator(".decision-card .card-technical")).toHaveCount(0);
+  await page.getByRole("button", { name: "Menu", exact: true }).click();
+  await page.getByText("Card details", { exact: true }).click();
   await expect(page.locator(".technical-events code")).toContainText("/");
   await expect(page.locator(".technical-agent strong")).toHaveText(
     /GPT|Claude|Gemini/,
@@ -226,4 +236,49 @@ test("choices show only their labels and cards show technical context", async ({
   await expect(page.locator(".card-technical > div").first()).toHaveClass(
     "technical-events",
   );
+});
+
+test("phone browser height changes keep readable text and both choices on screen", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openGame(page);
+  for (const [width, height] of [
+    [393, 667],
+    [393, 780],
+    [320, 568],
+    [430, 740],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate(() => document.fonts.ready);
+    const layout = await page.evaluate(() => {
+      const choice = document.querySelector(".choice.approve")!;
+      const copy = document.querySelector(".decision-card .card-copy > p")!;
+      const footer = document.querySelector(".site-footer")!;
+      return {
+        width: innerWidth,
+        height: innerHeight,
+        scrollWidth: document.documentElement.scrollWidth,
+        scrollHeight: document.documentElement.scrollHeight,
+        choiceBottom: choice.getBoundingClientRect().bottom,
+        choiceHeight: choice.getBoundingClientRect().height,
+        footerBottom: footer.getBoundingClientRect().bottom,
+        copySize: parseFloat(getComputedStyle(copy).fontSize),
+        choiceSize: parseFloat(
+          getComputedStyle(choice.querySelector("strong")!).fontSize,
+        ),
+      };
+    });
+    expect(layout.scrollWidth).toBeLessThanOrEqual(width);
+    expect(layout.scrollHeight).toBeLessThanOrEqual(height);
+    expect(layout.choiceBottom).toBeLessThan(height);
+    expect(layout.footerBottom).toBeLessThanOrEqual(height);
+    expect(layout.choiceHeight).toBeGreaterThanOrEqual(44);
+    expect(layout.copySize).toBeGreaterThanOrEqual(16);
+    expect(layout.choiceSize).toBeGreaterThanOrEqual(16);
+  }
+  await expect(page.getByRole("button", { name: "Pause game" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Menu", exact: true }),
+  ).toBeVisible();
 });

@@ -10,9 +10,9 @@ A large supermarket, a warehouse, online orders, five helpful agents, and two ch
 - Keep inventory, security, reputation, and cash above zero. Meters show health; the two choices show only their option text.
 - There is **no decision time limit**. Results stay visible for 4.5 seconds. Day reports wait for your “Open day” action.
 - A game has five days, six decisions per day. Three-day shifts are available with `?mode=quick`.
-- The card shows correlated event topics first, followed by a proposal attributed to an illustrative GPT / Claude / Gemini label. No model API is invoked; this is explained in How to play.
-- “Why this card?” shows actual triggering events, the correlation rule, agent disagreement, and the deterministic recommendation.
-- Shop, Events, and The mesh are optional panels. Opening a panel pauses live updates. Space or the pause button also pauses.
+- Menu shows correlated event topics first, followed by a proposal attributed to an illustrative GPT / Claude / Gemini label. No model API is invoked; this is explained in How to play.
+- Menu → “Why this card?” shows actual triggering events, the correlation rule, agent disagreement, and the deterministic recommendation.
+- Menu holds Your operation, Events, The mesh, and the current card details. Opening it freezes live updates. There is no visible pause button; Space remains a keyboard shortcut.
 - Best scores are stored locally and shown at the end. Replay a seed or share a link to challenge someone under the same starting conditions.
 
 ## Run locally
@@ -28,8 +28,8 @@ Open http://localhost:5173/sam-retail/.
 
 ```sh
 npm run check                 # deterministic engine tests + TypeScript + production build
-npx playwright install chromium
-npm run test:e2e              # mobile and desktop browser tests against the production build
+npx playwright install chromium webkit
+npm run test:e2e              # desktop, mobile Chrome, and mobile Safari tests against the production build
 npm run preview              # production preview, port 4173
 ```
 

@@ -21,6 +21,10 @@ export default defineConfig({
       name: "mobile",
       use: { ...devices["iPhone 13"], defaultBrowserType: "chromium" },
     },
+    {
+      name: "mobile-safari",
+      use: { ...devices["iPhone 13"], defaultBrowserType: "webkit" },
+    },
   ],
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined

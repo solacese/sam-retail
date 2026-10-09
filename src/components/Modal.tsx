@@ -31,7 +31,7 @@ export function Modal({
       aria-label={title}
     >
       <div className="modal-top">
-        <span className="eyebrow">MINIMART / {title.toUpperCase()}</span>
+        <span className="eyebrow">{title}</span>
         <button
           className="icon-button"
           aria-label="Close dialog"

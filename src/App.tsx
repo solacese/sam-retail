@@ -62,6 +62,7 @@ const COLORS = {
   cash: "#e2c485",
 };
 type Dialog =
+  | "menu"
   | "tutorial"
   | "xray"
   | "architecture"
@@ -333,7 +334,7 @@ export default function App() {
   };
   const lastReport = state?.reports.at(-1);
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${state ? "in-game" : "in-lobby"}`}>
       <header className="site-header">
         <button
           className="wordmark"
@@ -364,7 +365,6 @@ export default function App() {
                 />
               </div>
               <div className="card-copy">
-                <span className="character-name">YOU, THE NEW CEO</span>
                 <h1>
                   A big store,
                   <br />
@@ -377,7 +377,6 @@ export default function App() {
                   <br />
                   You have the final say.
                 </p>
-                <span className="welcome-flourish">✦</span>
               </div>
             </section>
           </div>
@@ -502,43 +501,6 @@ export default function App() {
                         <div className="card-copy">
                           <h2>{p.template.title}</h2>
                           <p>{p.template.situation}</p>
-                          <div className="card-technical">
-                            <div className="technical-events">
-                              <span>events:</span>{" "}
-                              <code>
-                                {[
-                                  ...new Set(
-                                    p.evidence.map((e) => e.event.topic),
-                                  ),
-                                ].join(" + ")}
-                              </code>
-                            </div>
-                            <div className="technical-agent">
-                              <span>agent:</span>{" "}
-                              <p>
-                                <strong>{DEMO_MODELS[p.template.agent]}</strong>{" "}
-                                proposes to{" "}
-                                {(p.suggested === "approve"
-                                  ? p.template.recommendation
-                                  : `${p.template.rejectLabel}. Protect what is running low.`
-                                ).replace(/^./, (letter) =>
-                                  letter.toLowerCase(),
-                                )}
-                                {p.updated && (
-                                  <span
-                                    className="updated-dot"
-                                    title={p.updateReason}
-                                  />
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            className="why-button"
-                            onClick={() => setDialog("xray")}
-                          >
-                            <ScanLine size={12} /> Why this card?
-                          </button>
                         </div>
                       </SwipeCard>
                     )
@@ -575,31 +537,15 @@ export default function App() {
                   </strong>
                 </button>
               </div>
-              <div className="turn-line">
-                <div
+              <div className="visually-hidden" role="status">
+                <span
                   className="turn-dots"
                   aria-label={`Decision ${state.turn} of 6`}
-                >
-                  {Array.from({ length: 6 }, (_, i) => (
-                    <span
-                      className={
-                        i < state.turn - 1
-                          ? "done"
-                          : i === state.turn - 1
-                            ? "current"
-                            : ""
-                      }
-                      key={i}
-                    />
-                  ))}
-                </div>
+                />
                 <span className="countdown">
                   {feedback ? "Decision committed" : "Take your time"}
                 </span>
               </div>
-              <p className="controls-hint">
-                Swipe the card · ← → to decide · Space to pause
-              </p>
             </>
           )}
           {state.status === "report" && !feedback && (
@@ -747,25 +693,78 @@ export default function App() {
               </button>
             </section>
           )}
-          <div className="optional-panels">
-            <button aria-label="Pause game" onClick={() => setPaused(true)}>
-              <Pause size={13} /> Pause
-            </button>
-            <button onClick={() => setDialog("shop")}>
-              <ShoppingBag size={13} /> Shop
-            </button>
-            <button onClick={() => setDialog("events")}>
-              <Radio size={13} /> Events
-            </button>
-            <button onClick={() => setDialog("architecture")}>
-              <Info size={13} /> The mesh
-            </button>
-          </div>
         </main>
       )}
       <footer className="site-footer">
         <button onClick={() => setDialog("tutorial")}>How to play</button>
+        <button onClick={() => setDialog("menu")} aria-haspopup="dialog">
+          Menu <ChevronDown size={18} />
+        </button>
       </footer>
+      {dialog === "menu" && (
+        <Modal title="Menu" onClose={() => setDialog(null)}>
+          {p && (
+            <details
+              className="menu-card-details"
+              aria-label="Current card details"
+            >
+              <summary>Card details</summary>
+              <h3>{p.template.title}</h3>
+              <div className="card-technical">
+                <div className="technical-events">
+                  <span>events:</span>{" "}
+                  <code>
+                    {[...new Set(p.evidence.map((e) => e.event.topic))].join(
+                      " + ",
+                    )}
+                  </code>
+                </div>
+                <div className="technical-agent">
+                  <span>agent:</span>{" "}
+                  <p>
+                    <strong>{DEMO_MODELS[p.template.agent]}</strong> proposes to{" "}
+                    {(p.suggested === "approve"
+                      ? p.template.recommendation
+                      : `${p.template.rejectLabel}. Protect what is running low.`
+                    ).replace(/^./, (letter) => letter.toLowerCase())}
+                    {p.updated && (
+                      <span className="updated-dot" title={p.updateReason} />
+                    )}
+                  </p>
+                </div>
+              </div>
+            </details>
+          )}
+          <nav className="game-menu" aria-label="Game menu">
+            {p && (
+              <button onClick={() => setDialog("xray")}>
+                <ScanLine size={22} /> Why this card?
+              </button>
+            )}
+            {state && (
+              <>
+                <button onClick={() => setDialog("shop")}>
+                  <ShoppingBag size={22} /> Your operation
+                </button>
+                <button onClick={() => setDialog("events")}>
+                  <Radio size={22} /> Events
+                </button>
+              </>
+            )}
+            <button onClick={() => setDialog("architecture")}>
+              <Info size={22} /> The mesh
+            </button>
+            <button onClick={() => setDialog("tutorial")}>
+              <Play size={22} /> How to play
+            </button>
+            {state && (
+              <button onClick={() => setDialog("restart")}>
+                <RotateCcw size={22} /> New game
+              </button>
+            )}
+          </nav>
+        </Modal>
+      )}
       {paused && !dialog && (
         <Modal
           title="Paused"
@@ -823,8 +822,8 @@ export default function App() {
             <li>
               <ScanLine size={18} />
               <span>
-                “Why this card?” reveals the agents’ disagreement and the events
-                behind it. Reading panels pauses the clock.
+                Menu → “Why this card?” reveals the agents’ disagreement and the
+                events behind it. Reading panels pauses the clock.
               </span>
             </li>
             <li>
