@@ -1,0 +1,170 @@
+import { test, expect } from "@playwright/test";
+async function openGame(page: import("@playwright/test").Page) {
+  await page.goto("?seed=BROWSER-TEST");
+  await page.getByRole("button", { name: "Open for business" }).click();
+}
+test("mobile and desktop launch a single-card game without overflow", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await openGame(page);
+  await expect(page.getByRole("meter")).toHaveCount(4);
+  await expect(page.getByRole("button", { name: /^Approve:/ })).toBeVisible();
+  const sizes = await page.evaluate(() => ({
+    width: innerWidth,
+    scroll: document.documentElement.scrollWidth,
+    bottom: document.querySelector(".choice.approve")!.getBoundingClientRect()
+      .bottom,
+    height: innerHeight,
+  }));
+  expect(sizes.scroll).toBeLessThanOrEqual(sizes.width);
+  expect(sizes.bottom).toBeLessThan(sizes.height);
+  expect(errors).toEqual([]);
+});
+test("pause and Event X-Ray preserve the current untimed decision", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.clock.install();
+  await page.clock.pauseAt(new Date());
+  await openGame(page);
+  await page
+    .getByRole("button", { name: "Why this card?", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.locator(".rule-block code")).toContainText("AND");
+  await expect(page.locator(".xray-events code").first()).toBeVisible();
+  await page.clock.fastForward(300000);
+  await page.getByRole("button", { name: "Back to the decision" }).click();
+  await page.getByRole("button", { name: "Pause game" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Take a breather." }),
+  ).toBeVisible();
+  await page.clock.fastForward(300000);
+  await page.getByRole("button", { name: "Resume", exact: true }).click();
+  await expect(page.locator(".turn-dots")).toHaveAttribute(
+    "aria-label",
+    "Decision 1 of 6",
+  );
+});
+test("decisions have no time limit or automatic rejection", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.clock.install();
+  await page.clock.pauseAt(new Date());
+  await openGame(page);
+  await page.clock.fastForward(300000);
+  await expect(page.locator(".turn-dots")).toHaveAttribute(
+    "aria-label",
+    "Decision 1 of 6",
+  );
+  await expect(page.locator(".countdown")).toHaveText("Take your time");
+  await expect(page.getByRole("button", { name: /^Approve:/ })).toBeEnabled();
+  await expect(page.locator(".card-timer")).toHaveCount(0);
+});
+test("keyboard decisions commit and Space pauses when gameplay has focus", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.clock.install();
+  await page.clock.pauseAt(new Date());
+  await openGame(page);
+  await page.locator(".game-main").focus();
+  await page.keyboard.press("Space");
+  await expect(
+    page.getByRole("button", { name: "Resume", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Resume", exact: true }).click();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByText("APPROVED", { exact: true })).toBeVisible();
+  await page.clock.runFor(1900);
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.getByText("REJECTED", { exact: true })).toBeVisible();
+});
+test("six decisions reach the daily report and autonomy unlock", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.clock.install();
+  await page.clock.pauseAt(new Date());
+  await openGame(page);
+  for (let i = 0; i < 6; i++) {
+    await page.getByRole("button", { name: /^Approve:/ }).click();
+    await page.clock.runFor(1900);
+  }
+  await expect(page.getByText("DAY 1 COMPLETE", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Stock monitoring unlocked", { exact: false }),
+  ).toBeVisible();
+  await page.clock.fastForward(60000);
+  await expect(page.getByText("DAY 1 COMPLETE", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Open day 2" }).click();
+  await expect(page.locator(".turn-dots")).toHaveAttribute(
+    "aria-label",
+    "Decision 1 of 6",
+  );
+  await page.getByRole("button", { name: "Shop", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Delegate bounded low-risk actions" }),
+  ).toBeEnabled();
+});
+test("event stream and shop are optional panels", async ({ page }) => {
+  await openGame(page);
+  await expect(page.locator(".event-panel")).toHaveCount(0);
+  await page.getByRole("button", { name: "Events", exact: true }).click();
+  await expect(page.locator(".event-row")).not.toHaveCount(0);
+  await expect(
+    page.getByText("decision/proposed", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await page.getByRole("button", { name: "Shop", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your little empire." }),
+  ).toBeVisible();
+  await expect(page.getByText("Seed: BROWSER-TEST")).toBeVisible();
+});
+test("pointer swipe approves without a button", async ({ page }) => {
+  await openGame(page);
+  const card = page.locator(".decision-card");
+  const b = await card.boundingBox();
+  if (!b) throw Error("Missing card");
+  await page.mouse.move(b.x + b.width / 2, b.y + 80);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2 + 120, b.y + 85, { steps: 12 });
+  await page.mouse.up();
+  await expect(page.getByText("APPROVED", { exact: true })).toBeVisible();
+});
+test("small viewport and reduced-motion preferences remain playable", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 320, height: 640 });
+  await openGame(page);
+  await expect(page.getByRole("button", { name: /^Approve:/ })).toBeVisible();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(320);
+  await page.getByRole("button", { name: /^Reject:/ }).click();
+  await expect(page.getByText("REJECTED", { exact: true })).toBeVisible();
+});
+
+test("choices show directions without exact points and cards show technical context", async ({
+  page,
+}) => {
+  await openGame(page);
+  const choices = page.locator(".choice");
+  await expect(choices.locator(".effect-now")).toHaveCount(2);
+  await expect(choices.first().locator(".option-effect").first()).toBeVisible();
+  await expect(choices.last().locator(".option-effect").first()).toBeVisible();
+  await expect(page.locator(".resource>small")).toHaveCount(0);
+  await expect(page.locator(".option-effect b").first()).toContainText(
+    /up|down/,
+  );
+  await expect(page.locator(".technical-events code")).toContainText("/");
+  await expect(page.locator(".technical-model strong")).toHaveText(
+    /GPT|Claude|Gemini/,
+  );
+  await expect(page.locator(".technical-model small")).toHaveText("simulated");
+});
