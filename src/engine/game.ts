@@ -254,7 +254,7 @@ export class RetailGame {
           "security/loss/confirmed",
           "business",
           { loss: p.amount },
-          "Returns monitor",
+          "Transaction monitor",
           undefined,
           p.causedBy,
         );
@@ -380,10 +380,10 @@ export class RetailGame {
       );
     if (o.fraud > 0.65 || r.security < 48)
       this.emit(
-        "security/return/suspicious",
+        "security/transaction/suspicious",
         "business",
         { anomalies: Number(o.fraud.toFixed(2)) },
-        "Returns monitor",
+        "Transaction monitor",
       );
     this.emit(
       "security/risk/updated",

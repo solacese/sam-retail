@@ -96,15 +96,15 @@ export function correlate(state: GameState): Detection[] {
     o.fraud > 0.65 || r.security < 48,
     [
       [
-        "security/return/suspicious",
-        `${o.fraud.toFixed(1)} anomalous returns per interval`,
+        "security/transaction/suspicious",
+        `${o.fraud.toFixed(1)} anomalous transactions per interval`,
       ],
       [
         "security/risk/updated",
         `Security health ${Math.round(r.security)}/100`,
       ],
     ],
-    "(return_anomalies > 0.65 OR security < 48) AND recent_security_telemetry",
+    "(transaction_anomalies > 0.65 OR security < 48) AND recent_security_telemetry",
     o.fraud / 3,
     r.security < 28 ? 15 : 5 + o.fraud,
   );

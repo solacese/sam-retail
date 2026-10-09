@@ -30,6 +30,6 @@ The authoritative TypeScript definition is `RetailEvent` in `src/engine/types.ts
 - `causationId`: immediate originating event; delayed actions retain the original player action id.
 - `simulated`: explicitly distinguishes synthetic demonstration events.
 
-Representative topics: `pos/sale/completed`, `inventory/stock/low`, `inventory/stockout`, `supplier/delivery/delayed`, `security/return/suspicious`, `marketing/campaign/started`, `customer/review/negative`, `operations/queue/long`, `store/shelf/empty`, `finance/cash/critical`, `retail/situation/stock_risk`, `agent/triggered`, `agent/message`, `decision/proposed`, `player/approved`, `retail/action/executed`, `retail/outcome/verified`.
+Representative topics: `pos/sale/completed`, `inventory/stock/low`, `inventory/stockout`, `supplier/delivery/delayed`, `security/transaction/suspicious`, `marketing/campaign/started`, `customer/review/negative`, `operations/queue/long`, `store/shelf/empty`, `finance/cash/critical`, `retail/situation/stock_risk`, `agent/triggered`, `agent/message`, `decision/proposed`, `player/approved`, `retail/action/executed`, `retail/outcome/verified`.
 
 The UI retains the latest 240 events; proposal evidence preserves the triggering event objects independently. This bounded browser history is not a durable broker or production audit store.
