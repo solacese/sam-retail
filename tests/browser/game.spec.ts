@@ -29,6 +29,7 @@ test("Menu and Event X-Ray preserve the current untimed decision", async ({
   await page.clock.install();
   await page.clock.pauseAt(new Date());
   await openGame(page);
+  const title = await page.locator(".decision-card h2").innerText();
   await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page
     .getByRole("button", { name: "Why this card?", exact: true })
@@ -45,10 +46,7 @@ test("Menu and Event X-Ray preserve the current untimed decision", async ({
   ).toBeVisible();
   await page.getByRole("button", { name: "Close dialog" }).click();
   await expect(page.getByRole("button", { name: "Pause game" })).toHaveCount(0);
-  await expect(page.locator(".turn-dots")).toHaveAttribute(
-    "aria-label",
-    "Decision 1 of 6",
-  );
+  await expect(page.locator(".decision-card h2")).toHaveText(title);
 });
 test("decisions have no time limit or automatic rejection", async ({
   page,
@@ -57,12 +55,10 @@ test("decisions have no time limit or automatic rejection", async ({
   await page.clock.install();
   await page.clock.pauseAt(new Date());
   await openGame(page);
+  const title = await page.locator(".decision-card h2").innerText();
   await page.clock.fastForward(300000);
-  await expect(page.locator(".turn-dots")).toHaveAttribute(
-    "aria-label",
-    "Decision 1 of 6",
-  );
-  await expect(page.locator(".countdown")).toHaveText("Take your time");
+  await expect(page.locator(".decision-card h2")).toHaveText(title);
+  await expect(page.locator(".day-line, .turn-dots, .countdown")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Approve:/ })).toBeEnabled();
   await expect(page.locator(".card-timer")).toHaveCount(0);
 });
@@ -103,10 +99,7 @@ test("six decisions reach the daily report and autonomy unlock", async ({
   await page.clock.fastForward(60000);
   await expect(page.getByText("DAY 1 COMPLETE", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Open day 2" }).click();
-  await expect(page.locator(".turn-dots")).toHaveAttribute(
-    "aria-label",
-    "Decision 1 of 6",
-  );
+  await expect(page.locator(".decision-card")).toBeVisible();
   await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page
     .getByRole("button", { name: "Your operation", exact: true })
@@ -205,15 +198,9 @@ test("results remain readable for 4.5 seconds", async ({ page }) => {
   await expect(page.getByText("APPROVED", { exact: true })).toBeVisible();
   await page.clock.runFor(4000);
   await expect(page.getByText("APPROVED", { exact: true })).toBeVisible();
-  await expect(page.locator(".turn-dots")).toHaveAttribute(
-    "aria-label",
-    "Decision 1 of 6",
-  );
+  await expect(page.getByRole("button", { name: /^Approve:/ })).toBeDisabled();
   await page.clock.runFor(700);
-  await expect(page.locator(".turn-dots")).toHaveAttribute(
-    "aria-label",
-    "Decision 2 of 6",
-  );
+  await expect(page.getByText("APPROVED", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Approve:/ })).toBeEnabled();
 });
 

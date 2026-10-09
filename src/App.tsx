@@ -23,7 +23,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { RetailGame, DAYS, RESOURCE_KEYS, rankFor } from "./engine/game";
+import { RetailGame, RESOURCE_KEYS, rankFor } from "./engine/game";
 import { AGENTS } from "./engine/situations";
 import type {
   AgentId,
@@ -394,18 +394,12 @@ export default function App() {
           tabIndex={0}
           onKeyDown={keyDown}
           className="game-main"
-          aria-label="Solace Mart gameplay. Left arrow reject, right arrow approve, space pause."
+          aria-label="Solace Mart gameplay"
         >
           <ResourcesBar
             resources={state.resources}
             preview={Math.abs(dragX) > 20 || hoverChoice ? preview : undefined}
           />
-          <div className="day-line">
-            <span>
-              DAY {state.day} <i>·</i> {DAYS[state.day - 1]}
-            </span>
-            <span>{state.turn} / 6</span>
-          </div>
           {playing && (
             <>
               <div className="card-stack">
@@ -537,15 +531,6 @@ export default function App() {
                   </strong>
                 </button>
               </div>
-              <div className="visually-hidden" role="status">
-                <span
-                  className="turn-dots"
-                  aria-label={`Decision ${state.turn} of 6`}
-                />
-                <span className="countdown">
-                  {feedback ? "Decision committed" : "Take your time"}
-                </span>
-              </div>
             </>
           )}
           {state.status === "report" && !feedback && (
@@ -600,9 +585,6 @@ export default function App() {
                 Open day {state.day + 1}
                 <ArrowRight size={16} />
               </button>
-              <small className="report-next">
-                Take your time. Continue when you’re ready.
-              </small>
             </section>
           )}
           {end && (
