@@ -495,6 +495,23 @@ export default function App() {
                         <div className="card-copy">
                           <h2>{p.template.title}</h2>
                           <p>{p.template.situation}</p>
+                          <div className="card-context">
+                            <div>
+                              <strong>Events</strong>
+                              <span>
+                                {[...new Set(p.evidence.map((e) => e.event.topic))]
+                                  .slice(0, 2)
+                                  .map((topic) => topic.split("/").slice(-2).join("/"))
+                                  .join(" + ")}
+                              </span>
+                            </div>
+                            <div>
+                              <strong>Agents</strong>
+                              <span>
+                                {[...new Set([DEMO_MODELS[p.template.agent], DEMO_MODELS[p.template.peer]])].join(" + ")}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </SwipeCard>
                     )
@@ -694,7 +711,7 @@ export default function App() {
               <h3>{p.template.title}</h3>
               <div className="card-technical">
                 <div className="technical-events">
-                  <span>events:</span>{" "}
+                  <span>Events:</span>{" "}
                   <code>
                     {[...new Set(p.evidence.map((e) => e.event.topic))].join(
                       " + ",
@@ -702,7 +719,7 @@ export default function App() {
                   </code>
                 </div>
                 <div className="technical-agent">
-                  <span>agent:</span>{" "}
+                  <span>Agents:</span>{" "}
                   <p>
                     <strong>{DEMO_MODELS[p.template.agent]}</strong> proposes to{" "}
                     {(p.suggested === "approve"

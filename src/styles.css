@@ -2796,3 +2796,34 @@ svg {
 .menu-card-details h3 {
   margin-top: 16px;
 }
+/* The two requested context rows stay with the decision. */
+.card-context {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #b8c5ab;
+  font-size: var(--ui-body);
+  line-height: 1.4;
+  color: #405c49;
+}
+.card-context > div {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 8px;
+}
+.card-context strong {
+  font-weight: 750;
+  color: #203f31;
+}
+.card-context span {
+  overflow-wrap: anywhere;
+}
+.menu-card-details .technical-events > span,
+.menu-card-details .technical-agent > span {
+  color: #edf0df;
+  font-weight: 750;
+}
+.decision-card .portrait-scene {
+  min-height: 0;
+}

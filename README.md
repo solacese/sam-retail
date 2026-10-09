@@ -1,6 +1,6 @@
 # Solace Mart
 
-A large supermarket, a warehouse, online orders, five helpful agents, and two choices. A Reigns-inspired retail survival game with executable event correlation, cascading consequences, and a deliberately simple interface. All 60 cards use short, plain English.
+A large supermarket, a warehouse, online orders, five helpful agents, and two choices. A Reigns-inspired retail survival game with executable event correlation, cascading consequences, and a deliberately simple interface. All 72 cards use short, plain English. Solace keeps live updates flowing and coordinates bots; the manager decides how to balance cost, service, risk, and incomplete information.
 
 **Play:** https://solacese.github.io/sam-retail/
 
@@ -12,7 +12,7 @@ A large supermarket, a warehouse, online orders, five helpful agents, and two ch
 - A game has five days, six decisions per day. Three-day shifts are available with `?mode=quick`.
 - Menu shows correlated event topics first, followed by a proposal attributed to an illustrative GPT / Claude / Gemini label. No model API is invoked; this is explained in How to play.
 - Menu → “Why this card?” shows actual triggering events, the correlation rule, agent disagreement, and the deterministic recommendation.
-- Menu holds Your operation, Events, The mesh, and the current card details. Opening it freezes live updates. There is no visible pause button; Space remains a keyboard shortcut.
+- Cards show compact Events and Agents rows. Menu holds Your operation, Events, The mesh, and the full current card details. Opening it freezes live updates. There is no visible pause button; Space remains a keyboard shortcut.
 - Best scores are stored locally and shown at the end. Replay a seed or share a link to challenge someone under the same starting conditions.
 
 ## Run locally
@@ -45,7 +45,7 @@ The backend event adapter is a transport foundation for a future authenticated S
 
 - `src/engine/game.ts`: seeded operational simulation, consequence executor, autonomy, and scoring.
 - `src/engine/correlation.ts`: rolling-window rules and evidence collection.
-- `src/engine/situations.ts`: 60 authored situations, agent personalities, and approve/reject effects.
+- `src/engine/situations.ts`: 72 authored situations, agent personalities, and approve/reject effects.
 - `src/engine/bus.ts`: local event bus and optional HTTPS/SSE backend transport.
 - `src/App.tsx`: one-card UI, untimed interactions, reports, technical trace, replay, sharing.
 - `public/illustrations/` and `public/portraits/`: generated supermarket artwork and agent portraits.

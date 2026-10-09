@@ -20,11 +20,12 @@ function complete(
   return s;
 }
 describe("retail simulation", () => {
-  it("has 60 authored situations across 12 event patterns", () => {
-    expect(SITUATIONS).toHaveLength(60);
-    expect(new Set(SITUATIONS.map((t) => t.title)).size).toBe(60);
+  it("has 72 authored situations with successful Solace coordination across 12 event patterns", () => {
+    expect(SITUATIONS).toHaveLength(72);
+    expect(new Set(SITUATIONS.map((t) => t.title)).size).toBe(72);
     expect(new Set(SITUATIONS.map((t) => t.family)).size).toBe(12);
     for (const t of SITUATIONS) {
+      expect(t.situation).toContain("Solace");
       expect(t.approveLabel).not.toBe(t.rejectLabel);
       expect(Object.values(t.approve.delta).some((v) => v < 0)).toBe(true);
       expect(Object.values(t.reject.delta).some((v) => v !== 0)).toBe(true);

@@ -218,13 +218,15 @@ test("small viewport and reduced-motion preferences remain playable", async ({
   await expect(page.getByText("REJECTED", { exact: true })).toBeVisible();
 });
 
-test("plain choices keep technical details in the menu", async ({ page }) => {
+test("compact Events and Agents are visible, with full details in the menu", async ({ page }) => {
   await openGame(page);
   const choices = page.locator(".choice");
   await expect(choices.locator(".option-effects")).toHaveCount(0);
   await expect(choices.locator("strong")).toHaveCount(2);
   await expect(page.locator(".resource>small")).toHaveCount(0);
   await expect(page.locator(".decision-card .card-technical")).toHaveCount(0);
+  await expect(page.locator(".card-context strong")).toHaveText(["Events", "Agents"]);
+  await expect(page.locator(".card-context")).toBeVisible();
   await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page.getByText("Card details", { exact: true }).click();
   await expect(page.locator(".technical-events code")).toContainText("/");
@@ -255,12 +257,15 @@ test("phone browser height changes keep readable text and both choices on screen
       const choice = document.querySelector(".choice.approve")!;
       const copy = document.querySelector(".decision-card .card-copy > p")!;
       const footer = document.querySelector(".site-footer")!;
+      const context = document.querySelector(".card-context")!;
       return {
         width: innerWidth,
         height: innerHeight,
         scrollWidth: document.documentElement.scrollWidth,
         scrollHeight: document.documentElement.scrollHeight,
         choiceBottom: choice.getBoundingClientRect().bottom,
+        choiceTop: choice.getBoundingClientRect().top,
+        contextBottom: context.getBoundingClientRect().bottom,
         choiceHeight: choice.getBoundingClientRect().height,
         footerBottom: footer.getBoundingClientRect().bottom,
         copySize: parseFloat(getComputedStyle(copy).fontSize),
@@ -272,6 +277,7 @@ test("phone browser height changes keep readable text and both choices on screen
     expect(layout.scrollWidth).toBeLessThanOrEqual(width);
     expect(layout.scrollHeight).toBeLessThanOrEqual(height);
     expect(layout.choiceBottom).toBeLessThan(height);
+    expect(layout.contextBottom).toBeLessThan(layout.choiceTop);
     expect(layout.footerBottom).toBeLessThanOrEqual(height);
     expect(layout.choiceHeight).toBeGreaterThanOrEqual(44);
     expect(layout.copySize).toBeGreaterThanOrEqual(16);
