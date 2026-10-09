@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   ArrowDown,
-  ArrowLeft,
   ArrowRight,
   ArrowUp,
   ArrowUpRight,
@@ -29,7 +28,6 @@ import { AGENTS } from "./engine/situations";
 import type {
   AgentId,
   Choice,
-  Effect,
   GameState,
   Resource,
   Resources,
@@ -37,6 +35,7 @@ import type {
 import { AgentAvatar } from "./components/Illustrations";
 import { EventStream } from "./components/EventStream";
 import { Modal } from "./components/Modal";
+import { SwipeCard } from "./components/SwipeCard";
 const ICONS = {
   inventory: Package,
   security: ShieldCheck,
@@ -136,85 +135,6 @@ function ResourcesBar({
     </div>
   );
 }
-function OptionEffects({
-  effect,
-  resources,
-}: {
-  effect: Effect;
-  resources: Resources;
-}) {
-  const later: string[] = [];
-  if (effect.delivery) later.push("Delivery arrives in 2 decisions");
-  if (effect.waste && effect.waste > 0)
-    later.push("More food waste later; stock and cash fall");
-  if (effect.waste && effect.waste < 0) later.push("Less food goes to waste");
-  if (effect.promotion)
-    later.push(`Promotion runs for ${effect.promotion} decisions`);
-  if (effect.demand)
-    later.push(
-      effect.demand > 0 ? "Customer demand rises" : "Customer demand falls",
-    );
-  if (effect.fraud && effect.fraud > 0)
-    later.push("Fraud risk rises; loss in 2 decisions");
-  if (effect.fraud && effect.fraud < 0) later.push("Fraud pressure falls");
-  if (effect.staff)
-    later.push(
-      effect.staff > 0
-        ? "More staff; shorter queues"
-        : "Fewer staff; longer queues",
-    );
-  if (effect.equipment)
-    later.push(
-      effect.equipment > 0
-        ? "Equipment reliability improves"
-        : "Equipment risk increases",
-    );
-  if (effect.loyalty)
-    later.push(
-      effect.loyalty > 0
-        ? "More returning customers"
-        : "Fewer returning customers",
-    );
-  if (effect.margin)
-    later.push(
-      effect.margin > 0 ? "Profit per sale improves" : "Profit per sale falls",
-    );
-  if (effect.delay)
-    later.push(
-      effect.delay < 0 ? "Supplier delay reduced" : "Supplier delay increases",
-    );
-  const closes = RESOURCE_KEYS.some((k) => resources[k] + effect.delta[k] <= 0);
-  return (
-    <span className="option-effects">
-      <span className="effect-now">IMMEDIATE EFFECTS</span>
-      {RESOURCE_KEYS.filter((k) => effect.delta[k] !== 0).map((k) => {
-        const d =
-          Math.round(
-            (Math.max(0, Math.min(100, resources[k] + effect.delta[k])) -
-              resources[k]) *
-              10,
-          ) / 10;
-        return (
-          <span className="option-effect" key={k}>
-            <span>{LABELS[k]}</span>
-            <b className={d > 0 ? "gain" : "cost"}>
-              {d > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}{" "}
-              {d > 0 ? "up" : "down"}
-            </b>
-          </span>
-        );
-      })}
-      {closes && <span className="option-warning">This closes the store</span>}
-      {later.length > 0 && (
-        <span className="option-later">
-          {later.map((t) => (
-            <span key={t}>{t}</span>
-          ))}
-        </span>
-      )}
-    </span>
-  );
-}
 function ScoreFormula({ state }: { state: GameState }) {
   return (
     <div className="score-formula">
@@ -252,6 +172,8 @@ export default function App() {
   const [paused, setPaused] = useState(false);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [feedback, setFeedback] = useState(false);
+  const [resultReady, setResultReady] = useState(false);
+  const [swipeDirection, setSwipeDirection] = useState(1);
   const [best, setBest] = useState(readBest(mode));
   const [copied, setCopied] = useState(false);
   const [shareText, setShareText] = useState("");
@@ -269,6 +191,7 @@ export default function App() {
     setSeed(next.snapshot().seed);
     setPaused(false);
     setFeedback(false);
+    setResultReady(false);
     setDialog(null);
     setBest(readBest(mode));
     setSessionBest(false);
@@ -279,6 +202,8 @@ export default function App() {
   const decide = useCallback(
     (choice: Choice) => {
       if (!engine || !state?.proposal || paused || dialog || feedback) return;
+      setSwipeDirection(choice === "approve" ? 1 : -1);
+      setResultReady(false);
       setState(engine.resolve(choice));
       setFeedback(true);
       setHoverChoice(null);
@@ -287,16 +212,16 @@ export default function App() {
     [engine, state?.proposal, paused, dialog, feedback],
   );
   useEffect(() => {
-    if (!feedback || paused || dialog) return;
+    if (!feedback || !resultReady || paused || dialog) return;
     const t = window.setTimeout(() => {
       if (engine) {
         setState(engine.nextDecision());
         setFeedback(false);
         gameRef.current?.focus();
       }
-    }, 1700);
+    }, 4500);
     return () => clearTimeout(t);
-  }, [feedback, engine, paused, dialog]);
+  }, [feedback, resultReady, engine, paused, dialog]);
   useEffect(() => {
     setHoverChoice(null);
     setDragX(0);
@@ -369,6 +294,7 @@ export default function App() {
     setEngine(null);
     setPaused(false);
     setFeedback(false);
+    setResultReady(false);
     setDialog(null);
     setSeed(makeSeed());
   };
@@ -485,10 +411,16 @@ export default function App() {
             <>
               <div className="card-stack">
                 <div className="stack-back" />
-                <AnimatePresence mode={reduced ? "sync" : "wait"}>
+                <AnimatePresence
+                  mode={reduced ? "sync" : "wait"}
+                  custom={swipeDirection}
+                >
                   {feedback && state.lastResult ? (
                     <motion.div
                       className="game-card result-card"
+                      ref={(node) => {
+                        if (node) setResultReady(true);
+                      }}
                       key={`result-${state.history.length}`}
                       initial={reduced ? false : { opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -534,40 +466,12 @@ export default function App() {
                     </motion.div>
                   ) : (
                     p && (
-                      <motion.div
-                        className="game-card decision-card"
+                      <SwipeCard
                         key={p.id}
-                        initial={
-                          reduced ? false : { opacity: 0, y: 15, rotate: -2 }
-                        }
-                        animate={{ opacity: 1, y: 0, rotate: 0 }}
-                        exit={
-                          reduced
-                            ? undefined
-                            : {
-                                opacity: 0,
-                                x: dragX < 0 ? -120 : 120,
-                                rotate: dragX < 0 ? -12 : 12,
-                              }
-                        }
-                        drag={reduced ? false : "x"}
-                        dragConstraints={{ left: 0, right: 0 }}
-                        dragElastic={0.6}
-                        onDrag={(_, i) => setDragX(i.offset.x)}
-                        onDragEnd={(_, i) => {
-                          if (
-                            Math.abs(i.offset.x) > 65 ||
-                            Math.abs(i.velocity.x) > 650
-                          )
-                            decide(i.offset.x > 0 ? "approve" : "reject");
-                          setDragX(0);
-                        }}
-                        style={
-                          {
-                            touchAction: "pan-y",
-                            "--agent-color": AGENTS[p.template.agent].color,
-                          } as React.CSSProperties
-                        }
+                        reduced={Boolean(reduced)}
+                        agentColor={AGENTS[p.template.agent].color}
+                        onDragX={setDragX}
+                        onChoose={decide}
                       >
                         <div className="portrait-scene">
                           <img
@@ -636,7 +540,7 @@ export default function App() {
                             <ScanLine size={12} /> Why this card?
                           </button>
                         </div>
-                      </motion.div>
+                      </SwipeCard>
                     )
                   )}
                 </AnimatePresence>
@@ -652,18 +556,9 @@ export default function App() {
                   disabled={feedback || !p || paused || !!dialog}
                   aria-label={`Reject: ${p?.template.rejectLabel ?? "Decision committed"}`}
                 >
-                  <span>
-                    <ArrowLeft size={16} /> REJECT
-                  </span>
                   <strong>
                     {p?.template.rejectLabel ?? "Decision committed"}
                   </strong>
-                  {p && (
-                    <OptionEffects
-                      effect={p.template.reject}
-                      resources={state.resources}
-                    />
-                  )}
                 </button>
                 <button
                   className="choice approve"
@@ -675,18 +570,9 @@ export default function App() {
                   disabled={feedback || !p || paused || !!dialog}
                   aria-label={`Approve: ${p?.template.approveLabel ?? "Decision committed"}`}
                 >
-                  <span>
-                    APPROVE <ArrowRight size={16} />
-                  </span>
                   <strong>
                     {p?.template.approveLabel ?? "On to the next event"}
                   </strong>
-                  {p && (
-                    <OptionEffects
-                      effect={p.template.approve}
-                      resources={state.resources}
-                    />
-                  )}
                 </button>
               </div>
               <div className="turn-line">
@@ -950,10 +836,10 @@ export default function App() {
             </li>
           </ul>
           <p className="fine-print">
-            Six decisions per day. Read the effects under each option before
-            choosing. Days wait for you to continue. The game generates its
-            events and agent proposals locally; no live AI or broker is
-            connected.
+            Six decisions per day. Read both options before choosing. Results
+            stay on screen for 4.5 seconds. Days wait for you to continue. The
+            game generates its events and agent proposals locally; no live AI or
+            broker is connected.
           </p>
           <button
             className="primary-button"

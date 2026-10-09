@@ -6,9 +6,9 @@ A large supermarket, a warehouse, online orders, five helpful agents, and two ch
 
 ## Play the game
 
-- Swipe right or press → to approve. Swipe left or press ← to reject. Both options also have buttons.
-- Keep inventory, security, reputation, and cash above zero. Meters show health; choices show directions rather than exact point values.
-- There is **no decision time limit**. Day reports wait for your “Open day” action.
+- Swipe right or press → to approve. Swipe left or press ← to reject. Both options also have buttons. Cards tilt, lift, and leave along a curved path; short swipes spring back.
+- Keep inventory, security, reputation, and cash above zero. Meters show health; the two choices show only their option text.
+- There is **no decision time limit**. Results stay visible for 4.5 seconds. Day reports wait for your “Open day” action.
 - A game has five days, six decisions per day. Three-day shifts are available with `?mode=quick`.
 - The card shows correlated event topics first, followed by a proposal attributed to an illustrative GPT / Claude / Gemini label. No model API is invoked; this is explained in How to play.
 - “Why this card?” shows actual triggering events, the correlation rule, agent disagreement, and the deterministic recommendation.

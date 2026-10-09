@@ -30,6 +30,9 @@ body {
   margin: 0;
   min-width: 320px;
 }
+html {
+  overflow-x: clip;
+}
 button,
 input,
 textarea {
@@ -2459,4 +2462,15 @@ svg {
   .choice {
     padding: 9px 11px;
   }
+}
+/* Two plain choices below the card. */
+.choice {
+  min-height: 64px;
+  padding: 14px 12px;
+}
+.choice > strong {
+  min-height: 0;
+  margin-top: 0;
+  font-size: 15px;
+  line-height: 1.4;
 }

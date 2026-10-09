@@ -79,7 +79,7 @@ test("keyboard decisions commit and Space pauses when gameplay has focus", async
   await page.getByRole("button", { name: "Resume", exact: true }).click();
   await page.keyboard.press("ArrowRight");
   await expect(page.getByText("APPROVED", { exact: true })).toBeVisible();
-  await page.clock.runFor(1900);
+  await page.clock.runFor(4700);
   await page.keyboard.press("ArrowLeft");
   await expect(page.getByText("REJECTED", { exact: true })).toBeVisible();
 });
@@ -92,7 +92,7 @@ test("six decisions reach the daily report and autonomy unlock", async ({
   await openGame(page);
   for (let i = 0; i < 6; i++) {
     await page.getByRole("button", { name: /^Approve:/ }).click();
-    await page.clock.runFor(1900);
+    await page.clock.runFor(4700);
   }
   await expect(page.getByText("DAY 1 COMPLETE", { exact: true })).toBeVisible();
   await expect(
@@ -125,17 +125,76 @@ test("event stream and shop are optional panels", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByText("Seed: BROWSER-TEST")).toBeVisible();
 });
-test("pointer swipe approves without a button", async ({ page }) => {
+for (const [direction, result] of [
+  [1, "APPROVED"],
+  [-1, "REJECTED"],
+] as const) {
+  test(`pointer swipe tilts and arcs the card before ${result.toLowerCase()}`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await openGame(page);
+    const card = page.locator(".decision-card");
+    await expect(card).toHaveCSS("opacity", "1");
+    const b = await card.boundingBox();
+    if (!b) throw Error("Missing card");
+    await page.mouse.move(b.x + b.width / 2, b.y + 80);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 2 + direction * 120, b.y + 85, {
+      steps: 12,
+    });
+    await expect
+      .poll(() =>
+        card.evaluate((el, expectedDirection) => {
+          const matrix = new DOMMatrix(getComputedStyle(el).transform);
+          return (
+            Math.sign(matrix.b) === expectedDirection &&
+            Math.abs(matrix.b) > 0.05 &&
+            matrix.f < -1
+          );
+        }, direction),
+      )
+      .toBe(true);
+    await page.mouse.up();
+    await expect
+      .poll(() =>
+        page.evaluate((expectedDirection) => {
+          const card = document.querySelector(".decision-card");
+          if (!card) return false;
+          const matrix = new DOMMatrix(getComputedStyle(card).transform);
+          return (
+            Math.sign(matrix.e) === expectedDirection &&
+            Math.abs(matrix.e) > 120 &&
+            matrix.f < -5
+          );
+        }, direction),
+      )
+      .toBe(true);
+    await expect(page.getByText(result, { exact: true })).toBeVisible();
+  });
+}
+
+test("results remain readable for 4.5 seconds", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.clock.install();
+  await page.clock.pauseAt(new Date());
   await openGame(page);
-  const card = page.locator(".decision-card");
-  const b = await card.boundingBox();
-  if (!b) throw Error("Missing card");
-  await page.mouse.move(b.x + b.width / 2, b.y + 80);
-  await page.mouse.down();
-  await page.mouse.move(b.x + b.width / 2 + 120, b.y + 85, { steps: 12 });
-  await page.mouse.up();
+  await page.getByRole("button", { name: /^Approve:/ }).click();
   await expect(page.getByText("APPROVED", { exact: true })).toBeVisible();
+  await page.clock.runFor(4000);
+  await expect(page.getByText("APPROVED", { exact: true })).toBeVisible();
+  await expect(page.locator(".turn-dots")).toHaveAttribute(
+    "aria-label",
+    "Decision 1 of 6",
+  );
+  await page.clock.runFor(700);
+  await expect(page.locator(".turn-dots")).toHaveAttribute(
+    "aria-label",
+    "Decision 2 of 6",
+  );
+  await expect(page.getByRole("button", { name: /^Approve:/ })).toBeEnabled();
 });
+
 test("small viewport and reduced-motion preferences remain playable", async ({
   page,
 }) => {
@@ -150,18 +209,14 @@ test("small viewport and reduced-motion preferences remain playable", async ({
   await expect(page.getByText("REJECTED", { exact: true })).toBeVisible();
 });
 
-test("choices show directions without exact points and cards show technical context", async ({
+test("choices show only their labels and cards show technical context", async ({
   page,
 }) => {
   await openGame(page);
   const choices = page.locator(".choice");
-  await expect(choices.locator(".effect-now")).toHaveCount(2);
-  await expect(choices.first().locator(".option-effect").first()).toBeVisible();
-  await expect(choices.last().locator(".option-effect").first()).toBeVisible();
+  await expect(choices.locator(".option-effects")).toHaveCount(0);
+  await expect(choices.locator("strong")).toHaveCount(2);
   await expect(page.locator(".resource>small")).toHaveCount(0);
-  await expect(page.locator(".option-effect b").first()).toContainText(
-    /up|down/,
-  );
   await expect(page.locator(".technical-events code")).toContainText("/");
   await expect(page.locator(".technical-agent strong")).toHaveText(
     /GPT|Claude|Gemini/,
