@@ -24,9 +24,16 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
-      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+      # Prepare the same Pages tar directly: upload-pages-artifact's nested
+      # upload-artifact@v4 reference violates this organization's SHA policy.
+      - name: Archive Pages artifact
+        run: tar --dereference --hard-dereference --directory dist --exclude=.git --exclude=.github -cf "$RUNNER_TEMP/artifact.tar" .
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          path: dist
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
+          retention-days: 1
+          if-no-files-found: error
   deploy:
     needs: build
     runs-on: ubuntu-latest
