@@ -164,21 +164,34 @@ for (const [direction, result] of [
         }, direction),
       )
       .toBe(true);
+    // Observe each frame before releasing: a remote CI browser can miss a
+    // half-second exit between separate polling round trips.
+    const exitCurve = page.evaluate(
+      (expectedDirection) =>
+        new Promise<boolean>((resolve) => {
+          const started = performance.now();
+          const observe = () => {
+            const card = document.querySelector(".decision-card");
+            if (card) {
+              const matrix = new DOMMatrix(getComputedStyle(card).transform);
+              if (
+                Math.sign(matrix.e) === expectedDirection &&
+                Math.abs(matrix.e) > 120 &&
+                matrix.f < -5
+              ) {
+                resolve(true);
+                return;
+              }
+            }
+            if (!card || performance.now() - started > 2000) resolve(false);
+            else requestAnimationFrame(observe);
+          };
+          requestAnimationFrame(observe);
+        }),
+      direction,
+    );
     await page.mouse.up();
-    await expect
-      .poll(() =>
-        page.evaluate((expectedDirection) => {
-          const card = document.querySelector(".decision-card");
-          if (!card) return false;
-          const matrix = new DOMMatrix(getComputedStyle(card).transform);
-          return (
-            Math.sign(matrix.e) === expectedDirection &&
-            Math.abs(matrix.e) > 120 &&
-            matrix.f < -5
-          );
-        }, direction),
-      )
-      .toBe(true);
+    expect(await exitCurve).toBe(true);
     await expect(page.getByText(result, { exact: true })).toBeVisible();
   });
 }
