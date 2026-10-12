@@ -9,6 +9,7 @@ import {
   Gift,
 } from "lucide-react";
 import geography from "../data/europe.json";
+import { COUNTRY_LABELS } from "../data/countryLabels";
 import {
   COUNTRIES,
   SHOPS,
@@ -47,7 +48,7 @@ function CountryMap({
   const scale = view[2] / 826;
   const shops = country ? SHOPS.filter((s) => s.countryId === country.id) : [];
   return (
-    <div className="europe-map-frame">
+    <div className={`europe-map-frame ${country ? "country-map-frame" : "continent-map-frame"}`}>
       <svg
         className="europe-map"
         viewBox={view.join(" ")}
@@ -139,31 +140,16 @@ function CountryMap({
             />
           ),
         )}
-        {!country && (
-          <g aria-hidden="true" className="atlas-doodles">
-            <path
-              d="M180 510Q270 325 420 410T650 390M355 320Q525 280 505 180"
-              stroke="#f1d38f"
-              strokeWidth="2"
-              strokeDasharray="3 9"
-              fill="none"
-            />
-            {["FR", "DE", "ES", "IT", "GB", "SE", "PL", "NL"].map((id) => {
-              const c = COUNTRIES.find((c) => c.id === id)!;
-              return (
-                <g
-                  key={id}
-                  transform={`translate(${c.center.join(" ")})`}
-                  pointerEvents="none"
-                >
-                  <circle r="12" fill="#254b3a" />
-                  <path d="M-7 1h14v9H-7zM-9 1l9-8 9 8" fill="#efdab2" />
-                  <rect x="-2" y="4" width="4" height="6" fill="#69896c" />
-                </g>
-              );
-            })}
-          </g>
-        )}
+        {!country && COUNTRIES.map(c => {
+          const label = COUNTRY_LABELS[c.id] ?? { x: c.center[0], y: c.center[1] };
+          const lines = label.lines ?? [c.name];
+          return <g key={`label-${c.id}`} className="country-label" aria-hidden="true">
+            {label.callout && <path d={`M${c.center.join(" ")}L${label.x} ${label.y - 5}`} className="country-label-line" />}
+            <text x={label.x} y={label.y} textAnchor="middle" className={label.callout ? "country-label-callout" : ""}>
+              {lines.map((line, i) => <tspan key={line} x={label.x} dy={i === 0 ? 0 : 16}>{line}</tspan>)}
+            </text>
+          </g>;
+        })}
         {shops.map((shop, i) => (
           <g
             key={shop.id}

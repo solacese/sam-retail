@@ -394,3 +394,55 @@ test("the shop stays beside desktop cards and opens from the mobile footer", asy
     await expect(page.getByRole("button", { name: /^Approve:/ })).toBeEnabled();
   }
 });
+
+test("country names are drawn on the map and shop art loads", async ({ page }) => {
+  await page.goto("?seed=ART-TEST");
+  await expect(page.locator(".country-label")).toHaveCount(41);
+  await expect(page.locator(".country-label").filter({ hasText: /^France$/ })).toBeVisible();
+  await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
+  await page.getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true }).click();
+  const artwork = page.locator(".shop-artwork");
+  const href = await artwork.getAttribute("href");
+  expect(href).toMatch(/\/shops\/[a-z-]+\.webp$/);
+  const response = await page.request.get(href!);
+  expect(response.ok()).toBe(true);
+  expect(response.headers()["content-type"]).toContain("image/webp");
+});
+
+test("live events move all three robots even when the feed is held", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("?seed=ROBOT-TEST");
+  await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
+  await page.getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true }).click();
+  await page.getByRole("button", { name: "Hold feed", exact: true }).click();
+  const held = await page.locator(".shop-event-feed").innerText();
+  const moved = await page.locator(".isometric-shop").evaluate(svg => new Promise<boolean>(resolve => {
+    const robots = [...svg.querySelectorAll("[data-robot]")];
+    const initial = robots.map(r => ({ transform: getComputedStyle(r).transform, task: r.getAttribute("data-task") }));
+    const changed = new Set<number>();
+    const started = performance.now();
+    const observe = () => {
+      robots.forEach((r, i) => { if (r.getAttribute("data-task") !== initial[i].task && getComputedStyle(r).transform !== initial[i].transform) changed.add(i); });
+      if (changed.size === 3) resolve(true);
+      else if (performance.now() - started > 6000) resolve(false);
+      else requestAnimationFrame(observe);
+    };
+    requestAnimationFrame(observe);
+  }));
+  expect(moved).toBe(true);
+  expect(await page.locator(".shop-event-feed").innerText()).toBe(held);
+  await expect(page.locator('[data-robot="shield"]')).toHaveAttribute("data-task", /abc\/retail\/(fridge|camera)\//);
+});
+
+test("reduced motion keeps robots still while scoped events continue", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await freezeClock(page);
+  await page.goto("?seed=QUIET-ROBOTS");
+  await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
+  await page.getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true }).click();
+  const destinations = await page.locator("[data-robot]").evaluateAll(robots => robots.map(r => r.getAttribute("data-destination")));
+  await page.clock.runFor(6000);
+  expect(await page.locator("[data-robot]").evaluateAll(robots => robots.map(r => r.getAttribute("data-destination")))).toEqual(destinations);
+  await page.getByRole("button", { name: "Pricing", exact: true }).click();
+  await expect(page.locator(".shop-event-row code").first()).toHaveText(/^abc\/retail\/price\/updated\/v1\/fr\/fr-0\/[a-z-]+$/);
+});

@@ -1,0 +1,22 @@
+// Small countries use sea-side callouts so the map stays readable.
+export const COUNTRY_LABELS: Record<string, { x: number; y: number; lines?: string[]; callout?: boolean }> = {
+  IS: { x: 78, y: 144 }, IE: { x: 165, y: 377, callout: true },
+  GB: { x: 239, y: 267, lines: ["United", "Kingdom"] },
+  NO: { x: 415, y: 177 }, SE: { x: 494, y: 210 }, FI: { x: 609, y: 162 },
+  RU: { x: 752, y: 231 }, EE: { x: 616, y: 243 }, LV: { x: 604, y: 275 },
+  LT: { x: 579, y: 304 }, BY: { x: 651, y: 329 }, PL: { x: 520, y: 355 },
+  DE: { x: 414, y: 353 }, NL: { x: 310, y: 324, callout: true },
+  BE: { x: 262, y: 398, callout: true }, LU: { x: 247, y: 422, callout: true },
+  FR: { x: 322, y: 478 }, ES: { x: 266, y: 566 }, PT: { x: 133, y: 584, callout: true },
+  CH: { x: 285, y: 450, callout: true }, AT: { x: 451, y: 435 },
+  CZ: { x: 468, y: 380, lines: ["Czech", "Republic"] }, SK: { x: 536, y: 416 },
+  HU: { x: 529, y: 446 }, UA: { x: 693, y: 392 }, RO: { x: 601, y: 468 },
+  IT: { x: 438, y: 541 }, DK: { x: 351, y: 281, callout: true },
+  SI: { x: 368, y: 500, callout: true }, HR: { x: 370, y: 523, callout: true },
+  BA: { x: 733, y: 431, lines: ["Bosnia and", "Herzegovina"], callout: true },
+  RS: { x: 726, y: 476, callout: true }, ME: { x: 720, y: 501, callout: true },
+  XK: { x: 740, y: 526, callout: true }, MK: { x: 738, y: 551, lines: ["North Macedonia"], callout: true },
+  AL: { x: 458, y: 600, callout: true }, BG: { x: 593, y: 514 },
+  GR: { x: 568, y: 628 }, TR: { x: 703, y: 601 },
+  MD: { x: 741, y: 356, callout: true }, CY: { x: 743, y: 657, callout: true },
+};

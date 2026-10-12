@@ -2945,3 +2945,21 @@ svg {
  font-family: Manrope, sans-serif;
  font-weight: 650;
 }
+/* Keep the country names on the map, with callouts for the smallest countries. */
+.country-label { pointer-events: none; }
+.country-label text { fill: #203e2e; font-family: Manrope, sans-serif; font-weight: 800; font-size: 15px; paint-order: stroke; stroke: #dae1ba; stroke-width: 3px; stroke-linejoin: round; }
+.country-label .country-label-callout { fill: #f2edd6; stroke: #254b3a; stroke-width: 4px; }
+.country-label-line { fill: none; stroke: #e1e4c0; stroke-width: 1.3px; opacity: .8; pointer-events: none; }
+.country-label:hover text { fill: #efcb7d; stroke: #254b3a; }
+.play-layout { width: min(1180px, 100%); gap: 24px; }
+.desktop-store { flex-basis: 640px; max-width: 680px; }
+.store-stage { background: #f0ead4; }
+.store-stage .isometric-shop { max-height: none; padding-bottom: 30px; }
+.desktop-store .store-stage .isometric-shop { height: clamp(280px, 42dvh, 390px); }
+.shop-explorer .store-stage .isometric-shop { height: clamp(280px, 42dvh, 390px); }
+.modal .store-stage .isometric-shop { height: auto; min-height: 230px; }
+@media (max-width: 700px) {
+ .continent-map-frame .europe-map { width: 100%; height: auto; }
+ .shop-explorer > .store-dashboard { height: 760px; }
+ .shop-explorer .store-stage .isometric-shop { height: auto; min-height: 260px; }
+}

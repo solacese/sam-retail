@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Shop } from "../data/shops";
 import type { GameState } from "./types";
+import { storeTopic } from "./storeTopics";
 export type SignalKind =
   | "inventory"
   | "pricing"
@@ -21,7 +22,7 @@ export const SIGNAL_TYPES: Record<
   SignalKind,
   { label: string; color: string; glyph: string }
 > = {
-  inventory: { label: "Inventory", color: "#8ed4ba", glyph: "+1" },
+  inventory: { label: "Inventory", color: "#8ed4ba", glyph: "▣" },
   pricing: { label: "Pricing", color: "#e9ca85", glyph: "€" },
   purchase: { label: "Purchases", color: "#ddaaa9", glyph: "✓" },
   iot: { label: "IoT", color: "#96b7d5", glyph: "°" },
@@ -62,16 +63,14 @@ export function useStoreTelemetry(shop: Shop | null, game?: GameState | null) {
         stock[product] = Math.max(0, stock[product] - 1);
         label = `${products[product]} purchased`;
         detail = `€${prices[product].toFixed(2)} · sale shared with stock and finance`;
-        topic = "pos/purchase/completed";
+        topic = storeTopic(shop, "purchase", "completed", `order-${n}`);
       }
       if (kind === "inventory") {
         const refill = stock[product] < 18;
         if (refill) stock[product] += 24;
         label = `${products[product]} stock ${refill ? "replenished" : "updated"}`;
         detail = `${stock[product]} available · shelf and online stock agree`;
-        topic = refill
-          ? "inventory/stock/replenished"
-          : "inventory/stock/updated";
+        topic = storeTopic(shop, "inventory", refill ? "replenished" : "updated", products[product].toLowerCase().replaceAll(" ", "-"));
       }
       if (kind === "pricing") {
         const i = (Math.floor(n / 8) + shop.style) % products.length;
@@ -80,7 +79,7 @@ export function useStoreTelemetry(shop: Shop | null, game?: GameState | null) {
         );
         label = `${products[i]} price published`;
         detail = `€${prices[i].toFixed(2)} · shelf, till, and online updated together`;
-        topic = "pricing/price/updated";
+        topic = storeTopic(shop, "price", "updated", products[i].toLowerCase().replaceAll(" ", "-"));
       }
       if (kind === "iot") {
         const fridge = n % 8 === 5;
@@ -88,12 +87,14 @@ export function useStoreTelemetry(shop: Shop | null, game?: GameState | null) {
         detail = fridge
           ? `${(3.4 + Math.sin(n) * 0.3).toFixed(1)}°C · fresh food protected`
           : "Entrance clear · safety agent informed";
-        topic = fridge ? "iot/fridge/temperature" : "iot/camera/status";
+        topic = fridge
+          ? storeTopic(shop, "fridge", "temperatureUpdated", "fridge-1")
+          : storeTopic(shop, "camera", "statusUpdated", "entrance-1");
       }
       if (kind === "agents") {
         label = "Picking robots coordinated";
-        detail = `${products[product]} order routed · Stocky and Sam share the task`;
-        topic = "smart-store/robot/task/assigned";
+        detail = `${products[product]} order routed · Stocky and Penny share the task`;
+        topic = storeTopic(shop, "robot", "taskAssigned", "stocky");
       }
       const type = SIGNAL_TYPES[kind];
       const signal = {
@@ -134,7 +135,7 @@ export function useStoreTelemetry(shop: Shop | null, game?: GameState | null) {
           .map((e) => ({
             id: `decision-${visit.current.epoch}-${e.id}`,
             kind: "agents" as const,
-            topic: e.topic,
+            topic: storeTopic(shop, "decision", "applied", e.id),
             label: "Your decision applied",
             detail: String(e.data.outcome),
             at: Date.now(),

@@ -14,6 +14,7 @@ import {
   type SignalKind,
   type StoreSignal,
 } from "../engine/storeTelemetry";
+import { matchesSubscription, storeSubscriptions } from "../engine/storeTopics";
 import { IsometricShop } from "./IsometricShop";
 const icons = {
   inventory: Package,
@@ -35,8 +36,9 @@ export function StoreDashboard({
     setHeld(null);
     setFilter("all");
   }, [shop.id]);
+  const subscriptions = storeSubscriptions(shop, filter);
   const shown = (held ?? signals)
-    .filter((s) => filter === "all" || s.kind === filter)
+    .filter((s) => subscriptions.some(pattern => matchesSubscription(s.topic, pattern)))
     .slice(0, 24);
   return (
     <aside
@@ -86,6 +88,7 @@ export function StoreDashboard({
         {(Object.keys(SIGNAL_TYPES) as SignalKind[]).map((kind) => (
           <button
             key={kind}
+            title={storeSubscriptions(shop, kind).join(" · ")}
             aria-pressed={filter === kind}
             onClick={() => setFilter(kind)}
           >
