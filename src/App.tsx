@@ -23,12 +23,18 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { RetailGame, RESOURCE_KEYS, rankFor } from "./engine/game";
+import {
+  RetailGame,
+  RESOURCE_KEYS,
+  rankFor,
+  profitTarget,
+} from "./engine/game";
 import { AGENTS } from "./engine/situations";
 import type {
   AgentId,
   Choice,
   GameState,
+  GameMode,
   Resource,
   Resources,
 } from "./engine/types";
@@ -36,6 +42,10 @@ import { AgentAvatar } from "./components/Illustrations";
 import { EventStream } from "./components/EventStream";
 import { Modal } from "./components/Modal";
 import { SwipeCard } from "./components/SwipeCard";
+import { EuropeExplorer } from "./components/EuropeExplorer";
+import { StoreDashboard } from "./components/StoreDashboard";
+import { COUNTRIES, shopById, type Country, type Shop } from "./data/shops";
+import { useStoreTelemetry } from "./engine/storeTelemetry";
 const ICONS = {
   inventory: Package,
   security: ShieldCheck,
@@ -69,6 +79,7 @@ type Dialog =
   | "restart"
   | "events"
   | "shop"
+  | "liveShop"
   | null;
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", {
@@ -165,11 +176,24 @@ function ScoreFormula({ state }: { state: GameState }) {
 export default function App() {
   const query = new URLSearchParams(window.location.search);
   const [seed, setSeed] = useState(query.get("seed")?.slice(0, 64) || makeSeed);
-  const [mode] = useState<"full" | "quick">(
-    query.get("mode") === "quick" ? "quick" : "full",
+  const [mode] = useState<GameMode>(
+    query.get("mode") === "quick"
+      ? "quick"
+      : query.get("mode") === "full"
+        ? "full"
+        : "week",
+  );
+  const [selectedShop, setSelectedShop] = useState<Shop | null>(
+    () => shopById(query.get("shop")) ?? null,
+  );
+  const [selectedCountry, setSelectedCountry] = useState<Country | null>(
+    () =>
+      COUNTRIES.find((c) => c.id === shopById(query.get("shop"))?.countryId) ??
+      null,
   );
   const [engine, setEngine] = useState<RetailGame | null>(null);
   const [state, setState] = useState<GameState | null>(null);
+  const signals = useStoreTelemetry(selectedShop, state);
   const [paused, setPaused] = useState(false);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [feedback, setFeedback] = useState(false);
@@ -186,7 +210,12 @@ export default function App() {
   const gameRef = useRef<HTMLElement>(null);
   const reduced = useReducedMotion();
   const start = (newSeed = seed) => {
-    const next = new RetailGame(newSeed.trim() || makeSeed(), mode);
+    const next = new RetailGame(
+      newSeed.trim() || makeSeed(),
+      mode,
+      undefined,
+      selectedShop?.perks ?? [],
+    );
     setEngine(next);
     setState(next.snapshot());
     setSeed(next.snapshot().seed);
@@ -275,7 +304,7 @@ export default function App() {
   const share = async () => {
     if (!state) return;
     const url = new URL(window.location.href);
-    url.search = `?seed=${encodeURIComponent(state.seed)}&mode=${state.mode}`;
+    url.search = `?seed=${encodeURIComponent(state.seed)}&mode=${state.mode}${selectedShop ? `&shop=${selectedShop.id}` : ""}`;
     const text = `I scored ${state.score.total.toLocaleString()}/10,000 in ABC Shop! ${rankFor(state.score.total)}. Can you beat my shift? Seed: ${state.seed}\n${url}`;
     try {
       if (navigator.share)
@@ -291,6 +320,8 @@ export default function App() {
     }
   };
   const home = () => {
+    setSelectedShop(null);
+    setSelectedCountry(null);
     setState(null);
     setEngine(null);
     setPaused(false);
@@ -334,7 +365,9 @@ export default function App() {
   };
   const lastReport = state?.reports.at(-1);
   return (
-    <div className={`app-shell ${state ? "in-game" : "in-lobby"}`}>
+    <div
+      className={`app-shell ${state ? "in-game week-mode" : "in-lobby explore-mode"}`}
+    >
       <header className="site-header">
         <button
           className="wordmark"
@@ -344,358 +377,380 @@ export default function App() {
         </button>
       </header>
       {!state && (
-        <main className="lobby">
-          <ResourcesBar
-            resources={{
-              inventory: 60,
-              security: 60,
-              reputation: 60,
-              cash: 60,
-            }}
-          />
-          <div className="card-stack lobby-stack">
-            <div className="stack-back" />
-            <section className="game-card welcome-card">
-              <div className="welcome-scene">
-                <img
-                  className="large-store-art"
-                  src={`${import.meta.env.BASE_URL}illustrations/large-store.png`}
-                  alt="A large supermarket with busy aisles, checkout teams, delivery trucks, and five robot helpers"
-                  fetchPriority="high"
-                />
-              </div>
-              <div className="card-copy">
-                <h1>Run ABC Shop.</h1>
-                <p>
-                  A busy store. A warehouse. Online orders.
-                  <br />
-                  Solace connects your five agents.
-                  <br />
-                  You make the big decisions.
-                </p>
-              </div>
-            </section>
-          </div>
-          <button
-            className="primary-button start-button"
-            onClick={() => start()}
-          >
-            Open for business <ArrowRight size={17} />
-          </button>
-        </main>
+        <EuropeExplorer
+          country={selectedCountry}
+          shop={selectedShop}
+          signals={signals}
+          onCountry={(country) => {
+            setSelectedCountry(country);
+            setSelectedShop(null);
+          }}
+          onShop={setSelectedShop}
+          onBack={() => setSelectedShop(null)}
+          onStart={() => start()}
+          visitLabel={
+            mode === "week"
+              ? "Help the agents for a week"
+              : mode === "full"
+                ? "Help the agents for five days"
+                : "Help the agents for three days"
+          }
+        />
       )}
       {state && (
-        <main
-          ref={gameRef}
-          tabIndex={0}
-          onKeyDown={keyDown}
-          className="game-main"
-          aria-label="ABC Shop gameplay"
-        >
-          <ResourcesBar
-            resources={state.resources}
-            preview={Math.abs(dragX) > 20 || hoverChoice ? preview : undefined}
-          />
-          {playing && (
-            <>
-              <div className="card-stack">
-                <div className="stack-back" />
-                <AnimatePresence
-                  mode={reduced ? "sync" : "wait"}
-                  custom={swipeDirection}
-                >
-                  {feedback && state.lastResult ? (
-                    <motion.div
-                      className="game-card result-card"
-                      ref={(node) => {
-                        if (node) setResultReady(true);
-                      }}
-                      key={`result-${state.history.length}`}
-                      initial={reduced ? false : { opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={reduced ? undefined : { opacity: 0 }}
-                    >
-                      <div className={`result-mark ${state.lastResult.choice}`}>
-                        {state.lastResult.choice === "approve" ? (
-                          <Check size={27} />
-                        ) : (
-                          <X size={27} />
-                        )}
-                      </div>
-                      <span className="character-name">
-                        {state.lastResult.choice === "approve"
-                          ? "APPROVED"
-                          : state.lastResult.choice === "timeout"
-                            ? "TIME’S UP · REJECTED"
-                            : "REJECTED"}
-                      </span>
-                      <h2>{state.lastResult.title}</h2>
-                      <p>{state.lastResult.outcome}</p>
-                      <div className="result-deltas">
-                        {RESOURCE_KEYS.filter(
-                          (k) => state.lastResult!.delta[k] !== 0,
-                        ).map((k) => {
-                          const Icon = ICONS[k],
-                            d = state.lastResult!.delta[k];
-                          return (
-                            <span
-                              key={k}
-                              className={d > 0 ? "positive" : "negative"}
-                            >
-                              <Icon size={16} />
-                              {d > 0 ? (
-                                <ArrowUp size={13} />
-                              ) : (
-                                <ArrowDown size={13} />
-                              )}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  ) : (
-                    p && (
-                      <SwipeCard
-                        key={p.id}
-                        reduced={Boolean(reduced)}
-                        agentColor={AGENTS[p.template.agent].color}
-                        onDragX={setDragX}
-                        onChoose={decide}
+        <div className="play-layout">
+          <main
+            ref={gameRef}
+            tabIndex={0}
+            onKeyDown={keyDown}
+            className="game-main"
+            aria-label="ABC Shop gameplay"
+          >
+            <ResourcesBar
+              resources={state.resources}
+              preview={
+                Math.abs(dragX) > 20 || hoverChoice ? preview : undefined
+              }
+            />
+            {playing && (
+              <>
+                <div className="card-stack">
+                  <div className="stack-back" />
+                  <AnimatePresence
+                    mode={reduced ? "sync" : "wait"}
+                    custom={swipeDirection}
+                  >
+                    {feedback && state.lastResult ? (
+                      <motion.div
+                        className="game-card result-card"
+                        ref={(node) => {
+                          if (node) setResultReady(true);
+                        }}
+                        key={`result-${state.history.length}`}
+                        initial={reduced ? false : { opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={reduced ? undefined : { opacity: 0 }}
                       >
-                        <div className="portrait-scene">
-                          <img
-                            className="generated-portrait"
-                            src={`${import.meta.env.BASE_URL}portraits/${p.template.agent.toLowerCase()}.png`}
-                            alt={`${p.template.agent}, ${AGENTS[p.template.agent].role}`}
-                            draggable={false}
-                          />
-                          {p.crisis && (
-                            <span className="crisis-label">
-                              CLOSING-TIME CRISIS
-                            </span>
-                          )}
-                          <div className="portrait-title">
-                            <strong>{p.template.agent}</strong>
-                            <span>{AGENTS[p.template.agent].role}</span>
-                          </div>
-                          {Math.abs(dragX) > 20 && (
-                            <span
-                              className={`swipe-answer ${dragX > 0 ? "yes" : "no"}`}
-                            >
-                              {dragX > 0
-                                ? p.template.approveLabel
-                                : p.template.rejectLabel}
-                            </span>
+                        <div
+                          className={`result-mark ${state.lastResult.choice}`}
+                        >
+                          {state.lastResult.choice === "approve" ? (
+                            <Check size={27} />
+                          ) : (
+                            <X size={27} />
                           )}
                         </div>
-                        <div className="card-copy">
-                          <h2>{p.template.title}</h2>
-                          <p>{p.template.situation}</p>
-                          <div className="card-context">
-                            <div>
-                              <strong>Events</strong>
-                              <span>
-                                {[...new Set(p.evidence.map((e) => e.event.topic))]
-                                  .slice(0, 2)
-                                  .map((topic) => topic.split("/").slice(-2).join("/"))
-                                  .join(" + ")}
+                        <span className="character-name">
+                          {state.lastResult.choice === "approve"
+                            ? "APPROVED"
+                            : state.lastResult.choice === "timeout"
+                              ? "TIME’S UP · REJECTED"
+                              : "REJECTED"}
+                        </span>
+                        <h2>{state.lastResult.title}</h2>
+                        <p>{state.lastResult.outcome}</p>
+                        <div className="result-deltas">
+                          {RESOURCE_KEYS.filter(
+                            (k) => state.lastResult!.delta[k] !== 0,
+                          ).map((k) => {
+                            const Icon = ICONS[k],
+                              d = state.lastResult!.delta[k];
+                            return (
+                              <span
+                                key={k}
+                                className={d > 0 ? "positive" : "negative"}
+                              >
+                                <Icon size={16} />
+                                {d > 0 ? (
+                                  <ArrowUp size={13} />
+                                ) : (
+                                  <ArrowDown size={13} />
+                                )}
                               </span>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    ) : (
+                      p && (
+                        <SwipeCard
+                          key={p.id}
+                          reduced={Boolean(reduced)}
+                          agentColor={AGENTS[p.template.agent].color}
+                          onDragX={setDragX}
+                          onChoose={decide}
+                        >
+                          <div className="portrait-scene">
+                            <img
+                              className="generated-portrait"
+                              src={`${import.meta.env.BASE_URL}portraits/${p.template.agent.toLowerCase()}.png`}
+                              alt={`${p.template.agent}, ${AGENTS[p.template.agent].role}`}
+                              draggable={false}
+                            />
+                            {p.crisis && (
+                              <span className="crisis-label">
+                                CLOSING-TIME CRISIS
+                              </span>
+                            )}
+                            <div className="portrait-title">
+                              <strong>{p.template.agent}</strong>
+                              <span>{AGENTS[p.template.agent].role}</span>
                             </div>
-                            <div>
-                              <strong>Agents</strong>
-                              <span>
-                                {[...new Set([DEMO_MODELS[p.template.agent], DEMO_MODELS[p.template.peer]])].join(" + ")}
+                            {Math.abs(dragX) > 20 && (
+                              <span
+                                className={`swipe-answer ${dragX > 0 ? "yes" : "no"}`}
+                              >
+                                {dragX > 0
+                                  ? p.template.approveLabel
+                                  : p.template.rejectLabel}
                               </span>
+                            )}
+                          </div>
+                          <div className="card-copy">
+                            <h2>{p.template.title}</h2>
+                            <p>{p.template.situation}</p>
+                            <div className="card-context">
+                              <div>
+                                <strong>Events</strong>
+                                <span>
+                                  {[
+                                    ...new Set(
+                                      p.evidence.map((e) => e.event.topic),
+                                    ),
+                                  ]
+                                    .slice(0, 2)
+                                    .map((topic) =>
+                                      topic.split("/").slice(-2).join("/"),
+                                    )
+                                    .join(" + ")}
+                                </span>
+                              </div>
+                              <div>
+                                <strong>Agents</strong>
+                                <span>
+                                  {[
+                                    ...new Set([
+                                      DEMO_MODELS[p.template.agent],
+                                      DEMO_MODELS[p.template.peer],
+                                    ]),
+                                  ].join(" + ")}
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </SwipeCard>
-                    )
-                  )}
-                </AnimatePresence>
-              </div>
-              <div className="decision-buttons">
-                <button
-                  className="choice reject"
-                  onPointerEnter={() => setHoverChoice("reject")}
-                  onPointerLeave={() => setHoverChoice(null)}
-                  onFocus={() => setHoverChoice("reject")}
-                  onBlur={() => setHoverChoice(null)}
-                  onClick={() => decide("reject")}
-                  disabled={feedback || !p || paused || !!dialog}
-                  aria-label={`Reject: ${p?.template.rejectLabel ?? "Decision committed"}`}
-                >
-                  <strong>
-                    {p?.template.rejectLabel ?? "Decision committed"}
-                  </strong>
-                </button>
-                <button
-                  className="choice approve"
-                  onPointerEnter={() => setHoverChoice("approve")}
-                  onPointerLeave={() => setHoverChoice(null)}
-                  onFocus={() => setHoverChoice("approve")}
-                  onBlur={() => setHoverChoice(null)}
-                  onClick={() => decide("approve")}
-                  disabled={feedback || !p || paused || !!dialog}
-                  aria-label={`Approve: ${p?.template.approveLabel ?? "Decision committed"}`}
-                >
-                  <strong>
-                    {p?.template.approveLabel ?? "On to the next event"}
-                  </strong>
-                </button>
-              </div>
-            </>
-          )}
-          {state.status === "report" && !feedback && (
-            <section className="game-card report-card">
-              <div className="report-symbol">✦</div>
-              <span className="character-name">DAY {state.day} COMPLETE</span>
-              <h2>Still in business.</h2>
-              <p>
-                The shutters are down.
-                <br />
-                Your next shift is calling.
-              </p>
-              <div className="report-grid">
-                {[
-                  ["Revenue", money(lastReport!.revenue)],
-                  ["Profit", money(lastReport!.profit)],
-                  ["Stockouts", lastReport!.stockouts],
-                  ["Fraud incidents", lastReport!.fraud],
-                  ["Satisfaction", `${lastReport!.satisfaction}%`],
-                  ["Agent interventions", lastReport!.interventions],
-                ].map(([label, value]) => (
-                  <div key={label}>
-                    <span>{label}</span>
-                    <strong>{value}</strong>
-                  </div>
-                ))}
-              </div>
-              <div className="daily-score">
-                <span>Day’s score</span>
-                <strong>
-                  {lastReport!.score >= 0 ? "+" : ""}
-                  {lastReport!.score.toLocaleString()}
-                </strong>
-              </div>
-              <p className="unlock">
-                <Zap size={12} />
-                {state.day === 1
-                  ? "Stock monitoring unlocked"
-                  : state.day === 2
-                    ? "Security alerts unlocked"
-                    : "Marketing guardrails unlocked"}
-              </p>
-              <button
-                className="primary-button"
-                onClick={() => {
-                  if (engine) {
-                    setState(engine.nextDay());
-                    gameRef.current?.focus();
-                  }
-                }}
-              >
-                Open day {state.day + 1}
-                <ArrowRight size={16} />
-              </button>
-            </section>
-          )}
-          {end && (
-            <section className="game-card end-card">
-              <Trophy size={28} />
-              <span className="character-name">
-                {state.status === "won" ? "YOU SURVIVED" : "SHOP CLOSED"}
-              </span>
-              <h2>
-                {state.status === "won"
-                  ? "ABC Shop is still open."
-                  : `${LABELS[state.failure!]} hit zero.`}
-              </h2>
-              <p>{rankFor(state.score.total)}</p>
-              <div className="final-score">
-                {state.score.total.toLocaleString()}
-                <small>/ 10,000</small>
-              </div>
-              {sessionBest && (
-                <span className="new-best">NEW PERSONAL BEST</span>
-              )}
-              <details className="score-details">
-                <summary>
-                  The story of your shift <ChevronDown size={12} />
-                </summary>
-                <div className="end-insights">
-                  <p>
-                    <strong>Best call</strong>
-                    {
-                      [...state.history].sort((a, b) => b.score - a.score)[0]
-                        ?.title
-                    }
-                  </p>
-                  <p>
-                    <strong>Hardest lesson</strong>
-                    {
-                      [...state.history].sort((a, b) => a.score - b.score)[0]
-                        ?.title
-                    }
-                  </p>
-                  <p>
-                    <strong>Biggest crisis</strong>
-                    {[...state.history]
-                      .filter((h) => h.crisis)
-                      .sort((a, b) => a.score - b.score)[0]?.title ??
-                      "Your first shift’s growing pains"}
-                  </p>
-                  <p>
-                    <strong>Business impact</strong>
-                    {money(state.profit)} profit · {state.interventions}{" "}
-                    interventions
-                  </p>
+                        </SwipeCard>
+                      )
+                    )}
+                  </AnimatePresence>
                 </div>
-                <ScoreFormula state={state} />
-                <p className="formula-note">
-                  Survival & balance scale with decisions completed. Profit caps
-                  at {money(state.mode === "quick" ? 1300 : 2200)}. Crises and
-                  collaboration scale with your mode. Penalties: 65 per
-                  stockout, 50 per fraud incident, 8 per wasted unit.
+                <div className="decision-buttons">
+                  <button
+                    className="choice reject"
+                    onPointerEnter={() => setHoverChoice("reject")}
+                    onPointerLeave={() => setHoverChoice(null)}
+                    onFocus={() => setHoverChoice("reject")}
+                    onBlur={() => setHoverChoice(null)}
+                    onClick={() => decide("reject")}
+                    disabled={feedback || !p || paused || !!dialog}
+                    aria-label={`Reject: ${p?.template.rejectLabel ?? "Decision committed"}`}
+                  >
+                    <strong>
+                      {p?.template.rejectLabel ?? "Decision committed"}
+                    </strong>
+                  </button>
+                  <button
+                    className="choice approve"
+                    onPointerEnter={() => setHoverChoice("approve")}
+                    onPointerLeave={() => setHoverChoice(null)}
+                    onFocus={() => setHoverChoice("approve")}
+                    onBlur={() => setHoverChoice(null)}
+                    onClick={() => decide("approve")}
+                    disabled={feedback || !p || paused || !!dialog}
+                    aria-label={`Approve: ${p?.template.approveLabel ?? "Decision committed"}`}
+                  >
+                    <strong>
+                      {p?.template.approveLabel ?? "On to the next event"}
+                    </strong>
+                  </button>
+                </div>
+              </>
+            )}
+            {state.status === "report" && !feedback && (
+              <section className="game-card report-card">
+                <div className="report-symbol">✦</div>
+                <span className="character-name">DAY {state.day} COMPLETE</span>
+                <h2>Still in business.</h2>
+                <p>
+                  The shutters are down.
+                  <br />
+                  Your next shift is calling.
                 </p>
-              </details>
-              <button
-                className="primary-button"
-                onClick={() => start(makeSeed())}
-              >
-                One more shift <RotateCcw size={16} />
-              </button>
-              <div className="replay-actions">
-                <button onClick={() => start(state.seed)}>Same seed</button>
-                <button onClick={share}>
-                  <Copy size={12} />
-                  {copied ? "Shared!" : "Share score"}
+                <div className="report-grid">
+                  {[
+                    ["Revenue", money(lastReport!.revenue)],
+                    ["Profit", money(lastReport!.profit)],
+                    ["Stockouts", lastReport!.stockouts],
+                    ["Fraud incidents", lastReport!.fraud],
+                    ["Satisfaction", `${lastReport!.satisfaction}%`],
+                    ["Agent interventions", lastReport!.interventions],
+                  ].map(([label, value]) => (
+                    <div key={label}>
+                      <span>{label}</span>
+                      <strong>{value}</strong>
+                    </div>
+                  ))}
+                </div>
+                <div className="daily-score">
+                  <span>Day’s score</span>
+                  <strong>
+                    {lastReport!.score >= 0 ? "+" : ""}
+                    {lastReport!.score.toLocaleString()}
+                  </strong>
+                </div>
+                <p className="unlock">
+                  <Zap size={12} />
+                  {state.day === 1
+                    ? "Stock monitoring unlocked"
+                    : state.day === 2
+                      ? "Security alerts unlocked"
+                      : "Marketing guardrails unlocked"}
+                </p>
+                <button
+                  className="primary-button"
+                  onClick={() => {
+                    if (engine) {
+                      setState(engine.nextDay());
+                      gameRef.current?.focus();
+                    }
+                  }}
+                >
+                  Open day {state.day + 1}
+                  <ArrowRight size={16} />
                 </button>
-              </div>
-              {shareText && (
-                <textarea
-                  aria-label="Copy score summary"
-                  className="share-fallback"
-                  readOnly
-                  value={shareText}
-                />
-              )}
-              <small className="end-best">
-                Personal best: {best.toLocaleString()}
-              </small>
-              <button className="text-button" onClick={home}>
-                Back to the storefront
-              </button>
-            </section>
+              </section>
+            )}
+            {end && (
+              <section className="game-card end-card">
+                <Trophy size={28} />
+                <span className="character-name">
+                  {state.status === "won"
+                    ? state.mode === "week"
+                      ? "WEEK COMPLETE"
+                      : "SHIFT COMPLETE"
+                    : "SHOP CLOSED"}
+                </span>
+                <h2>
+                  {state.status === "won"
+                    ? "ABC Shop is still open."
+                    : `${LABELS[state.failure!]} hit zero.`}
+                </h2>
+                <p>{rankFor(state.score.total)}</p>
+                <div className="final-score">
+                  {state.score.total.toLocaleString()}
+                  <small>/ 10,000</small>
+                </div>
+                {sessionBest && (
+                  <span className="new-best">NEW PERSONAL BEST</span>
+                )}
+                <details className="score-details">
+                  <summary>
+                    The story of your shift <ChevronDown size={12} />
+                  </summary>
+                  <div className="end-insights">
+                    <p>
+                      <strong>Best call</strong>
+                      {
+                        [...state.history].sort((a, b) => b.score - a.score)[0]
+                          ?.title
+                      }
+                    </p>
+                    <p>
+                      <strong>Hardest lesson</strong>
+                      {
+                        [...state.history].sort((a, b) => a.score - b.score)[0]
+                          ?.title
+                      }
+                    </p>
+                    <p>
+                      <strong>Biggest crisis</strong>
+                      {[...state.history]
+                        .filter((h) => h.crisis)
+                        .sort((a, b) => a.score - b.score)[0]?.title ??
+                        "Your first shift’s growing pains"}
+                    </p>
+                    <p>
+                      <strong>Business impact</strong>
+                      {money(state.profit)} profit · {state.interventions}{" "}
+                      interventions
+                    </p>
+                  </div>
+                  <ScoreFormula state={state} />
+                  <p className="formula-note">
+                    Survival & balance scale with decisions completed. Profit
+                    caps at {money(profitTarget(state.mode))}. Crises and
+                    collaboration scale with your mode. Penalties: 65 per
+                    stockout, 50 per fraud incident, 8 per wasted unit.
+                  </p>
+                </details>
+                <button
+                  className="primary-button"
+                  onClick={() => start(makeSeed())}
+                >
+                  One more shift <RotateCcw size={16} />
+                </button>
+                <div className="replay-actions">
+                  <button onClick={() => start(state.seed)}>Same seed</button>
+                  <button onClick={share}>
+                    <Copy size={12} />
+                    {copied ? "Shared!" : "Share score"}
+                  </button>
+                </div>
+                {shareText && (
+                  <textarea
+                    aria-label="Copy score summary"
+                    className="share-fallback"
+                    readOnly
+                    value={shareText}
+                  />
+                )}
+                <small className="end-best">
+                  Personal best: {best.toLocaleString()}
+                </small>
+                <button className="text-button" onClick={home}>
+                  Back to Europe
+                </button>
+              </section>
+            )}
+          </main>
+          {selectedShop && (
+            <div className="desktop-store">
+              <StoreDashboard shop={selectedShop} signals={signals} />
+            </div>
           )}
-        </main>
+        </div>
       )}
       <footer className="site-footer">
         <button onClick={() => setDialog("tutorial")}>How to play</button>
+        {state && selectedShop && (
+          <button
+            className="mobile-store-button"
+            onClick={() => setDialog("liveShop")}
+          >
+            <ShoppingBag size={18} /> Shop
+          </button>
+        )}
         <button onClick={() => setDialog("menu")} aria-haspopup="dialog">
           Menu <ChevronDown size={18} />
         </button>
       </footer>
+      {dialog === "liveShop" && selectedShop && (
+        <Modal
+          title={`ABC Shop · ${selectedShop.city}`}
+          onClose={() => setDialog(null)}
+        >
+          <StoreDashboard shop={selectedShop} signals={signals} />
+        </Modal>
+      )}
       {dialog === "menu" && (
         <Modal title="Menu" onClose={() => setDialog(null)}>
           {p && (
@@ -1052,7 +1107,7 @@ export default function App() {
             Restart this seed <RotateCcw size={16} />
           </button>
           <button className="text-button" onClick={home}>
-            Back to the storefront
+            Back to Europe
           </button>
         </Modal>
       )}

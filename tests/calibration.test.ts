@@ -30,3 +30,34 @@ it("qualifies replay diversity and a viable strategy across 100 full shifts", ()
   expect(Object.keys(counts)).toHaveLength(12);
   expect(templates.size).toBeGreaterThan(45);
 });
+
+it("keeps one-week visits viable across the different shop perk sets", () => {
+  const profiles = [
+    ["meal", "inventory", "pricing"],
+    ["inventory", "iot"],
+    ["meal", "pickup", "loyalty"],
+    ["pricing", "iot", "pickup"],
+    ["inventory", "loyalty"],
+  ] as const;
+  for (const perks of profiles) {
+    let wins = 0;
+    for (let i = 0; i < 20; i++) {
+      const game = new RetailGame(`WEEK-CALIBRATION-${i}`, "week", undefined, [
+        ...perks,
+      ]);
+      let s = game.snapshot();
+      for (
+        let n = 0;
+        n < 42 && s.status !== "won" && s.status !== "lost";
+        n++
+      ) {
+        s = game.resolve(s.proposal!.suggested);
+        if (s.status === "report") s = game.nextDay();
+        else if (s.status === "playing") s = game.nextDecision();
+      }
+      if (s.status === "won") wins++;
+    }
+    console.log({ perks, wins });
+    expect(wins).toBeGreaterThanOrEqual(15);
+  }
+});

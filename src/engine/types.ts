@@ -10,6 +10,7 @@ export type Category =
   | "action"
   | "outcome";
 export type Choice = "approve" | "reject" | "timeout";
+export type GameMode = "full" | "quick" | "week";
 export type Family =
   | "stock"
   | "supplier"
@@ -136,7 +137,8 @@ export interface ScoreBreakdown {
 }
 export interface GameState {
   seed: string;
-  mode: "full" | "quick";
+  mode: GameMode;
+  storePerks: import("../data/shops").PerkId[];
   day: number;
   turn: number;
   step: number;

@@ -9,10 +9,10 @@ A large supermarket, a warehouse, online orders, five helpful agents, and two ch
 - Swipe right or press → to approve. Swipe left or press ← to reject. Both options also have buttons. Cards tilt, lift, and leave along a curved path; short swipes spring back.
 - Keep inventory, security, reputation, and cash above zero. Meters show health; the two choices show only their option text.
 - There is **no decision time limit**. Results stay visible for 4.5 seconds. Day reports wait for your “Open day” action.
-- A game has five days, six decisions per day. Three-day shifts are available with `?mode=quick`.
+- Start on the Europe map, choose a country and ABC Shop, then assist its agents for **seven days, six decisions per day**. Legacy five-day shifts use `?mode=full`; three-day shifts use `?mode=quick`.
 - Menu shows correlated event topics first, followed by a proposal attributed to an illustrative GPT / Claude / Gemini label. No model API is invoked; this is explained in How to play.
 - Menu → “Why this card?” shows actual triggering events, the correlation rule, agent disagreement, and the deterministic recommendation.
-- Cards show compact Events and Agents rows. Menu holds Your operation, Events, The mesh, and the full current card details. Opening it freezes live updates. There is no visible pause button; Space remains a keyboard shortcut.
+- Cards show compact Events and Agents rows. Menu holds Your operation, Events, The mesh, and the full current card details. The isometric shop and live demo feed sit beside desktop cards; on mobile, open **Shop** from the footer. Opening it freezes live updates. There is no visible pause button; Space remains a keyboard shortcut.
 - Best scores are stored locally and shown at the end. Replay a seed or share a link to challenge someone under the same starting conditions.
 
 ## Run locally
@@ -34,6 +34,14 @@ npm run preview              # production preview, port 4173
 ```
 
 ## What's real in this demo?
+
+## Europe and connected shops
+
+The local catalog covers 41 countries with two or three fictional ABC Shops per country. Choose a country through the map or the keyboard-accessible country selector. Shops have distinct layouts, colors, city pins, and two or three perks. Stock optimization adds 5% to modeled revenue and halves modeled spoilage; meal deals improve starting reputation. These are game effects, not measured retail results.
+
+The independent store feed emits demo purchases, synchronized prices, stock updates/replenishment, fridge temperatures, camera status, and robot tasks every 420 ms. Filters cover Inventory, Pricing, Purchases, IoT, and Agents. **Hold feed** freezes the displayed list for reading; live activity continues. Manager outcomes also enter this feed from the actual card engine. The buffer is bounded to 80 events and the visible list to 24. Telemetry never advances a decision or creates a deadline.
+
+Country geometry and city centers come from [Natural Earth](https://www.naturalearthdata.com/about/terms-of-use/) public-domain data. Shops are fictional; pins represent illustrative city locations. Compiled geometry is bundled locally, with no map API or runtime network dependency. To rebuild it, run `scripts/build-europe-map.py` and `scripts/build-city-points.py` with the corresponding Natural Earth GeoJSON files. The isometric stores are original SVG artwork with shop-specific geometry and a reduced-motion alternative.
 
 The **simulation, event bus, correlation rules, resource calculations, delays, proposals, and score are real executable code**. Store events are synthetic. Agent dialogue and model labels are simulated; neither a Solace broker nor a live LLM is connected. There are no API keys or broker credentials in the browser.
 

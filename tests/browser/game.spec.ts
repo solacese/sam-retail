@@ -7,7 +7,15 @@ async function freezeClock(page: import("@playwright/test").Page) {
 }
 async function openGame(page: import("@playwright/test").Page) {
   await page.goto("?seed=BROWSER-TEST");
-  await page.getByRole("button", { name: "Open for business" }).click();
+  await page
+    .getByRole("button", { name: "Choose France", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Help the agents for a week", exact: true })
+    .click();
 }
 test("mobile and desktop launch a single-card game without overflow", async ({
   page,
@@ -62,7 +70,9 @@ test("decisions have no time limit or automatic rejection", async ({
   const title = await page.locator(".decision-card h2").innerText();
   await page.clock.fastForward(300000);
   await expect(page.locator(".decision-card h2")).toHaveText(title);
-  await expect(page.locator(".day-line, .turn-dots, .countdown")).toHaveCount(0);
+  await expect(page.locator(".day-line, .turn-dots, .countdown")).toHaveCount(
+    0,
+  );
   await expect(page.getByRole("button", { name: /^Approve:/ })).toBeEnabled();
   await expect(page.locator(".card-timer")).toHaveCount(0);
 });
@@ -219,14 +229,19 @@ test("small viewport and reduced-motion preferences remain playable", async ({
   await expect(page.getByText("REJECTED", { exact: true })).toBeVisible();
 });
 
-test("compact Events and Agents are visible, with full details in the menu", async ({ page }) => {
+test("compact Events and Agents are visible, with full details in the menu", async ({
+  page,
+}) => {
   await openGame(page);
   const choices = page.locator(".choice");
   await expect(choices.locator(".option-effects")).toHaveCount(0);
   await expect(choices.locator("strong")).toHaveCount(2);
   await expect(page.locator(".resource>small")).toHaveCount(0);
   await expect(page.locator(".decision-card .card-technical")).toHaveCount(0);
-  await expect(page.locator(".card-context strong")).toHaveText(["Events", "Agents"]);
+  await expect(page.locator(".card-context strong")).toHaveText([
+    "Events",
+    "Agents",
+  ]);
   await expect(page.locator(".card-context")).toBeVisible();
   await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page.getByText("Card details", { exact: true }).click();
@@ -288,4 +303,94 @@ test("phone browser height changes keep readable text and both choices on screen
   await expect(
     page.getByRole("button", { name: "Menu", exact: true }),
   ).toBeVisible();
+});
+
+test("Europe leads to a country, shop perks, and an untimed week", async ({
+  page,
+}) => {
+  await page.goto("?seed=ATLAS-TEST");
+  await expect(
+    page.getByRole("group", { name: "Choose a country on the Europe map" }),
+  ).toBeVisible();
+  await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
+  await expect(
+    page.getByRole("heading", { name: "France", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Meal deals", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("+5% revenue · less waste", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".shop-perk")).toHaveCount(3);
+  await page
+    .getByRole("button", { name: "Help the agents for a week", exact: true })
+    .click();
+  await expect(page.locator(".decision-card")).toBeVisible();
+  await expect(page.locator(".day-line, .countdown")).toHaveCount(0);
+});
+
+test("fast store events filter by pricing and IoT, and can be held to read", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("?seed=FEED-TEST");
+  await freezeClock(page);
+  await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
+  await page
+    .getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true })
+    .click();
+  await page.clock.runFor(4200);
+  await page.getByRole("button", { name: "Pricing", exact: true }).click();
+  await expect(page.locator(".shop-event-row").first()).toHaveAttribute(
+    "data-kind",
+    "pricing",
+  );
+  expect(
+    await page
+      .locator(".shop-event-row")
+      .evaluateAll((rows) =>
+        rows.every((row) => row.getAttribute("data-kind") === "pricing"),
+      ),
+  ).toBe(true);
+  await expect(page.locator(".shop-event-feed")).toContainText(
+    "shelf, till, and online updated together",
+  );
+  await page.getByRole("button", { name: "IoT", exact: true }).click();
+  await expect(page.locator(".shop-event-feed")).toContainText(
+    "Fridge temperature checked",
+  );
+  await expect(page.locator(".shop-event-feed")).toContainText(
+    "Safety camera checked",
+  );
+  await page.getByRole("button", { name: "Hold feed", exact: true }).click();
+  const held = await page.locator(".shop-event-feed").innerText();
+  await page.clock.runFor(8400);
+  expect(await page.locator(".shop-event-feed").innerText()).toBe(held);
+  await page.getByRole("button", { name: "Resume feed", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Hold feed", exact: true }),
+  ).toBeVisible();
+});
+
+test("the shop stays beside desktop cards and opens from the mobile footer", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openGame(page);
+  if (test.info().project.name === "desktop") {
+    await expect(page.locator(".desktop-store .isometric-shop")).toBeVisible();
+    await expect(page.locator(".desktop-store .shop-event-feed")).toBeVisible();
+  } else {
+    await page.getByRole("button", { name: "Shop", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.locator(".modal .isometric-shop")).toBeVisible();
+    await page
+      .getByRole("button", { name: "Close dialog", exact: true })
+      .click();
+    await expect(page.getByRole("button", { name: /^Approve:/ })).toBeEnabled();
+  }
 });

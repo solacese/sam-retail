@@ -221,3 +221,35 @@ describe("event adapters", () => {
     );
   });
 });
+
+describe("one-week shop visits", () => {
+  it("completes seven days and scores 42 decisions on a bounded scale", () => {
+    const game = new RetailGame("ABC-WEEK", "week", undefined, [
+      "meal",
+      "inventory",
+      "pricing",
+    ]);
+    let s = game.snapshot();
+    for (let i = 0; i < 42 && s.status !== "won" && s.status !== "lost"; i++) {
+      s = game.resolve(s.proposal!.suggested);
+      if (s.status === "report") s = game.nextDay();
+      else if (s.status === "playing") s = game.nextDecision();
+    }
+    expect(s.status).toBe("won");
+    expect(s.reports).toHaveLength(7);
+    expect(s.history).toHaveLength(42);
+    expect(s.score.survival).toBe(3500);
+    expect(s.score.total).toBeLessThanOrEqual(10000);
+  });
+  it("applies stock optimization revenue and reputation perks", () => {
+    const plain = new RetailGame("PERKS", "week").snapshot();
+    const optimized = new RetailGame("PERKS", "week", undefined, [
+      "meal",
+      "inventory",
+    ]).snapshot();
+    expect(optimized.revenue).toBeGreaterThanOrEqual(plain.revenue * 1.04);
+    expect(optimized.revenue).toBeLessThanOrEqual(plain.revenue * 1.06);
+    expect(optimized.resources.reputation).toBe(plain.resources.reputation + 6);
+    expect(optimized.resources.inventory).toBe(plain.resources.inventory + 6);
+  });
+});

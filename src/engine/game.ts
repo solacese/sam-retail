@@ -6,11 +6,17 @@ import type {
   Choice,
   Effect,
   GameState,
+  GameMode,
   RetailEvent,
   Resource,
   Resources,
   ScoreBreakdown,
 } from "./types";
+import type { PerkId } from "../data/shops";
+export const daysFor = (mode: GameMode) =>
+  mode === "week" ? 7 : mode === "quick" ? 3 : 5;
+export const profitTarget = (mode: GameMode) =>
+  mode === "week" ? 3100 : mode === "quick" ? 1300 : 2200;
 export const DAYS = [
   "Grand Opening",
   "Growing Pains",
@@ -35,7 +41,8 @@ export function seedHash(seed: string) {
   return h >>> 0;
 }
 export function calculateScore(s: GameState): ScoreBreakdown {
-  const progress = s.history.length / (s.mode === "quick" ? 18 : 30);
+  const decisions = daysFor(s.mode) * 6;
+  const progress = s.history.length / decisions;
   const survival = Math.round(3500 * progress);
   const values = Object.values(s.resources),
     average = values.reduce((a, b) => a + b, 0) / 4;
@@ -49,16 +56,14 @@ export function calculateScore(s: GameState): ScoreBreakdown {
       progress,
   );
   const profit = Math.round(
-    1500 * clamp(s.profit / (s.mode === "quick" ? 1300 : 2200), 0, 1),
+    1500 * clamp(s.profit / profitTarget(s.mode), 0, 1),
   );
   const customers = Math.round(
     ((1000 * s.resources.reputation) / 100) * progress,
   );
-  const crises = Math.round(
-    (1000 * s.crisesManaged) / (s.mode === "quick" ? 3 : 5),
-  );
+  const crises = Math.round((1000 * s.crisesManaged) / daysFor(s.mode));
   const collaboration = Math.round(
-    1000 * clamp(s.interventions / (s.mode === "quick" ? 18 : 30), 0, 1),
+    1000 * clamp(s.interventions / decisions, 0, 1),
   );
   const penalties = Math.round(
     s.stockouts * 65 + s.fraudIncidents * 50 + s.waste * 8,
@@ -101,13 +106,15 @@ export class RetailGame {
   private s: GameState;
   constructor(
     seed: string,
-    mode: "full" | "quick" = "full",
+    mode: GameMode = "full",
     private bus: EventAdapter = new LocalEventBus(),
+    storePerks: PerkId[] = [],
   ) {
     this.randomState = seedHash(seed);
     this.s = {
       seed,
       mode,
+      storePerks: [...storePerks],
       day: 1,
       turn: 1,
       step: 0,
@@ -120,11 +127,14 @@ export class RetailGame {
         promotion: 0,
         queue: 2,
         fraud: 0.4,
-        freshness: 85,
-        equipment: 96,
-        margin: 0.26,
-        loyalty: 0.5,
-        staff: 2,
+        freshness: storePerks.includes("inventory") ? 94 : 85,
+        equipment: storePerks.includes("iot") ? 100 : 96,
+        margin: storePerks.includes("pricing") ? 0.29 : 0.26,
+        loyalty:
+          0.5 +
+          (storePerks.includes("meal") ? 0.08 : 0) +
+          (storePerks.includes("loyalty") ? 0.1 : 0),
+        staff: storePerks.includes("pickup") ? 2.3 : 2,
         volatility: 0.3,
       },
       events: [],
@@ -153,6 +163,10 @@ export class RetailGame {
       },
     };
     this.advanceSimulation();
+    if (storePerks.includes("inventory")) this.s.resources.inventory += 6;
+    if (storePerks.includes("meal")) this.s.resources.reputation += 6;
+    if (storePerks.includes("iot")) this.s.resources.security += 6;
+    if (storePerks.includes("loyalty")) this.s.resources.reputation += 4;
     this.propose();
   }
   private random() {
@@ -231,7 +245,11 @@ export class RetailGame {
       if (p.kind === "waste") {
         const loss = Math.max(
           0,
-          Math.round(p.amount * (1 - o.freshness / 150)),
+          Math.round(
+            p.amount *
+              (1 - o.freshness / 150) *
+              (s.storePerks.includes("inventory") ? 0.5 : 1),
+          ),
         );
         if (loss > 0) {
           this.change({ inventory: -loss, cash: -Math.ceil(loss / 2) });
@@ -300,7 +318,10 @@ export class RetailGame {
       o.queue += 1 + s.day * 0.3;
     }
     const revenue = Math.round(
-      (120 + this.random() * 140) * o.demand * (r.inventory > 15 ? 1 : 0.55),
+      (120 + this.random() * 140) *
+        o.demand *
+        (r.inventory > 15 ? 1 : 0.55) *
+        (s.storePerks.includes("inventory") ? 1.05 : 1),
     );
     const profit = Math.round(revenue * o.margin - 26 - o.staff * 6);
     s.revenue += revenue;
@@ -831,7 +852,7 @@ export class RetailGame {
     if (this.checkFailure()) return this.snapshot();
     if (s.turn === 6) {
       this.report();
-      s.status = s.day === (s.mode === "quick" ? 3 : 5) ? "won" : "report";
+      s.status = s.day === daysFor(s.mode) ? "won" : "report";
     }
     return this.snapshot();
   }

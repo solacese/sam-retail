@@ -2827,3 +2827,121 @@ svg {
 .decision-card .portrait-scene {
   min-height: 0;
 }
+/* Europe, shop selection, and the connected store extension. */
+.explore-mode { height: auto; min-height: 100dvh; padding: 18px 24px; gap: 18px; }
+.explorer { width: min(1120px, 100%); margin: 0 auto; }
+.atlas-heading { margin: 8px 0 22px; }
+.atlas-kicker { display: block; font-size: 12px; font-weight: 750; letter-spacing: 1.5px; color: #a9c1a2; margin-bottom: 8px; }
+.explorer h1 { font-size: clamp(28px, 3vw, 38px); line-height: 1.2; letter-spacing: -1px; color: #edead7; margin: 0 0 10px; }
+.explorer-intro { color: #b5c5ad; font-size: 16px; line-height: 1.5; }
+.atlas-layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 24px; align-items: stretch; }
+.europe-map-frame { overflow: hidden; border-radius: 18px; border: 2px solid #638466; background: #254b3a; box-shadow: 0 8px 0 #102b2280; }
+.europe-map { display: block; width: 100%; height: 100%; min-height: 300px; max-height: 620px; }
+.country-shape { cursor: pointer; transition: fill .2s, stroke .2s; outline: none; }
+.country-shape:hover, .country-shape:focus { fill: #e8d596; stroke: #ffefd0; stroke-width: 3px; }
+.map-shop-pin { cursor: pointer; }
+.map-shop-pin:hover > circle, .map-shop-pin:focus > circle { stroke: #ffe4a2; stroke-width: 5px; }
+.atlas-back { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0; margin-bottom: 16px; color: #b5c5ad; font-size: 16px; }
+.country-picker { display: grid; gap: 10px; font-size: 16px; color: #c9d5b9; }
+.country-picker select { appearance: auto; width: 100%; color: #ecedd7; background: #2b503b; border: 1px solid #638466; border-radius: 10px; padding: 14px; min-height: 52px; font: inherit; cursor: pointer; }
+.country-picker select:focus-visible { outline: 2px solid #a3d8b9; outline-offset: 3px; }
+.atlas-welcome { background: #244232; border: 1px solid #466b4f; border-radius: 16px; padding: 28px 22px; margin-top: 24px; }
+.atlas-welcome h2 { font-size: 22px; line-height: 1.3; color: #edead7; margin: 22px 0 10px; }
+.atlas-welcome p { font-size: 16px; line-height: 1.5; color: #b5c5ad; margin-top: 12px; }
+.tiny-robot { width: 76px; height: 68px; margin: 0 auto; background: #e9e5c8; border: 8px solid #85bda0; border-radius: 20px; position: relative; box-shadow: -12px 3px #466f57, 12px 3px #466f57; }
+.tiny-robot span { color: #365a43; font-size: 22px; font-weight: 800; position: absolute; left: 8px; top: 4px; white-space: nowrap; }
+.tiny-robot i { position: absolute; width: 18px; height: 8px; border-radius: 0 0 12px 12px; background: #8bad7a; left: 21px; bottom: 9px; }
+.country-shops { display: grid; gap: 12px; margin-top: 20px; }
+.shop-choice { display: grid; grid-template-columns: 105px 1fr; gap: 8px; align-items: center; text-align: left; background: #eee8d2; border: 2px solid #d3d7b8; border-radius: 12px; padding: 8px 10px 8px 0; color: #2c513c; min-height: 112px; transition: transform .2s; }
+.shop-choice:hover { transform: translateY(-3px); border-color: #99c5a2; }
+.shop-thumbnail { background: #dfe3c3; border-radius: 8px; overflow: hidden; }
+.shop-thumbnail .isometric-shop { display: block; width: 100%; }
+.shop-choice strong { display: block; font-size: 18px; line-height: 1.3; font-weight: 750; }
+.shop-choice small { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-top: 8px; color: #637d56; }
+.shop-explorer { display: grid; grid-template-columns: minmax(310px, .9fr) minmax(0, 1.1fr); gap: 32px; align-items: start; }
+.shop-profile { padding: 18px 8px 28px; }
+.shop-profile .atlas-kicker { margin-top: 24px; }
+.shop-perks { display: grid; gap: 16px; margin: 26px 0; }
+.shop-perk { display: flex; gap: 14px; padding: 18px; background: #ece8d3; border: 1px solid #c5cfad; border-radius: 12px; color: #35553e; box-shadow: 0 4px 0 #304a3466; }
+.perk-icon { display: grid; place-items: center; width: 44px; height: 44px; flex: 0 0 44px; border-radius: 14px; background: #d9e2bd; color: #3d7051; }
+.shop-perk h2 { font-size: 18px; margin-bottom: 5px; color: #36513c; }
+.shop-perk strong { font-size: 16px; color: #397651; }
+.shop-perk p { font-size: 16px; line-height: 1.5; margin-top: 8px; color: #687b58; }
+.week-start { width: 100%; min-height: 54px; font-size: 16px; gap: 10px; }
+.week-invite { font-size: 16px; line-height: 1.5; color: #adbea1; margin-top: 16px; }
+.store-dashboard { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; padding: 16px; background: #244232; border: 1px solid #4e7354; border-radius: 16px; overflow: hidden; }
+.store-view-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.store-view-title .atlas-kicker { font-size: 10px; margin-bottom: 5px; }
+.store-view-title h2 { font-size: 20px; color: #ecead7; line-height: 1.3; }
+.live-pill { display: flex; align-items: center; gap: 5px; color: #aecda5; font-size: 12px; white-space: nowrap; }
+.store-stage { flex: 0 0 auto; background: #e6e5cb; border-radius: 12px; overflow: hidden; position: relative; }
+.store-stage .isometric-shop { display: block; width: 100%; max-height: 305px; padding-bottom: 24px; }
+.store-status { position: absolute; bottom: 9px; left: 12px; right: 12px; display: flex; justify-content: space-between; gap: 8px; color: #506b49; font-size: 12px; font-weight: 650; }
+.store-status span { display: flex; align-items: center; gap: 4px; }
+.feed-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; min-height: 46px; flex: 0 0 auto; }
+.feed-toolbar h3 { font-size: 18px; color: #dbe5c9; }
+.feed-toolbar button { font-size: 14px; min-height: 44px; padding: 6px 8px; color: #b2cca8; }
+.feed-filters { display: flex; gap: 6px; overflow-x: auto; flex: 0 0 auto; padding: 4px 2px 9px; scrollbar-width: thin; }
+.feed-filters button { min-height: 40px; padding: 8px 10px; white-space: nowrap; color: #bdcdb0; font-size: 14px; background: #31543d; border-radius: 8px; border: 1px solid #486d4f; }
+.feed-filters button[aria-pressed="true"] { color: #305039; background: #dce6bd; border-color: #dce6bd; }
+.shop-event-feed { flex: 1; min-height: 130px; height: 295px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #72946a #244232; overscroll-behavior: contain; }
+.shop-event-row { display: flex; align-items: flex-start; gap: 10px; padding: 12px 4px; border-bottom: 1px solid #466749; }
+.shop-event-row > svg { margin-top: 2px; color: var(--event-color); }
+.shop-event-row > div { min-width: 0; flex: 1; }
+.shop-event-row strong { font-size: 14px; line-height: 1.4; font-weight: 700; color: #e5e7cf; }
+.shop-event-row p { font-size: 13px; line-height: 1.45; margin-top: 4px; color: #b0c3a5; }
+.shop-event-row code { font-size: 11px; line-height: 1.4; color: var(--event-color); display: block; margin-top: 5px; overflow-wrap: anywhere; }
+.feed-empty { font-size: 14px; padding: 24px 6px; color: #b0c3a5; }
+.play-layout { display: flex; justify-content: center; gap: 30px; width: min(1040px, 100%); margin: 0 auto; flex: 1; min-height: 0; }
+.play-layout > .game-main { width: min(430px, 100%); flex: 0 1 430px; }
+.desktop-store { flex: 1 1 500px; min-width: 0; max-width: 510px; }
+.mobile-store-button { display: none !important; }
+.modal:has(.store-dashboard) { width: min(620px, 100%); }
+.modal .store-dashboard { border: 0; padding: 0; height: auto; background: transparent; }
+.modal .shop-event-feed { max-height: 280px; flex: 0 0 280px; }
+@media (max-width: 999px) {
+ .desktop-store { display: none; }
+ .mobile-store-button { display: flex !important; }
+ .atlas-layout { grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; }
+ .shop-explorer { gap: 20px; }
+}
+@media (max-width: 700px) {
+ .explore-mode { padding: 12px 16px; }
+ .atlas-heading { margin-top: 0; }
+ .atlas-layout, .shop-explorer { display: flex; flex-direction: column; gap: 22px; }
+ .europe-map { min-height: 0; aspect-ratio: 826 / 680; height: auto; max-height: none; }
+ .atlas-welcome { margin-top: 16px; padding: 18px; }
+ .atlas-welcome .tiny-robot { display: none; }
+ .atlas-welcome h2 { margin-top: 0; }
+ .atlas-welcome p:last-child { display: none; }
+ .country-shops { margin-top: 16px; }
+ .shop-choice { grid-template-columns: 120px 1fr; min-height: 102px; }
+ .shop-profile { padding: 0; }
+ .shop-profile .atlas-kicker { margin-top: 0; }
+ .shop-explorer > .store-dashboard { width: 100%; height: 640px; }
+ .shop-perk { padding: 16px; }
+ .week-mode .play-layout { gap: 0; }
+ .store-dashboard { padding: 12px; }
+ .feed-filters button { min-height: 44px; }
+ .store-status { font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) {
+ .country-shape, .shop-choice { transition: none; }
+}
+@media (min-width: 701px) {
+ .europe-map-frame { height: clamp(360px, calc(100dvh - 286px), 620px); }
+ .europe-map { min-height: 0; max-height: none; }
+}
+.desktop-store .store-stage .isometric-shop { height: clamp(180px, 28dvh, 255px); max-height: none; }
+.feed-filters button, .feed-toolbar button { font-size: 16px; }
+.shop-event-row strong { font-size: 16px; }
+.shop-event-row p { font-size: 14px; }
+.shop-event-row code { font-size: 12px; }
+@media (min-width: 701px) {
+ .shop-explorer > .store-dashboard { height: min(690px, calc(100dvh - 160px)); min-height: 540px; }
+ .shop-explorer .store-stage .isometric-shop { height: clamp(180px, 29dvh, 255px); max-height: none; }
+}
+.store-view-title h2, .shop-perk h2, .atlas-welcome h2, .explorer h1 {
+ font-family: Manrope, sans-serif;
+ font-weight: 650;
+}
