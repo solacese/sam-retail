@@ -331,7 +331,7 @@ test("Europe leads to a country, shop perks, and an untimed week", async ({
   await expect(page.locator(".day-line, .countdown")).toHaveCount(0);
 });
 
-test("fast store events filter by pricing and IoT, and can be held to read", async ({
+test("fast store events filter by pricing and IoT, and can be paused to read", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -364,13 +364,13 @@ test("fast store events filter by pricing and IoT, and can be held to read", asy
   await expect(page.locator(".shop-event-feed")).toContainText(
     "Safety camera checked",
   );
-  await page.getByRole("button", { name: "Hold feed", exact: true }).click();
+  await page.getByRole("button", { name: "Pause shop activity", exact: true }).click();
   const held = await page.locator(".shop-event-feed").innerText();
   await page.clock.runFor(8400);
   expect(await page.locator(".shop-event-feed").innerText()).toBe(held);
-  await page.getByRole("button", { name: "Resume feed", exact: true }).click();
+  await page.getByRole("button", { name: "Play shop activity", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Hold feed", exact: true }),
+    page.getByRole("button", { name: "Pause shop activity", exact: true }),
   ).toBeVisible();
 });
 
@@ -407,40 +407,36 @@ test("country names are drawn on the map and shop art loads", async ({ page }) =
   expect(response.headers()["content-type"]).toContain("image/webp");
 });
 
-test("live events move all three robots even when the feed is held", async ({ page }) => {
+test("pause and play stop the feed and shoppers together", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.goto("?seed=ROBOT-TEST");
+  await freezeClock(page);
+  await page.goto("?seed=PLAYBACK-TEST");
   await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
   await page.getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true }).click();
-  await page.getByRole("button", { name: "Hold feed", exact: true }).click();
-  const held = await page.locator(".shop-event-feed").innerText();
-  const moved = await page.locator(".isometric-shop").evaluate(svg => new Promise<boolean>(resolve => {
-    const robots = [...svg.querySelectorAll("[data-robot]")];
-    const initial = robots.map(r => ({ transform: getComputedStyle(r).transform, task: r.getAttribute("data-task") }));
-    const changed = new Set<number>();
-    const started = performance.now();
-    const observe = () => {
-      robots.forEach((r, i) => { if (r.getAttribute("data-task") !== initial[i].task && getComputedStyle(r).transform !== initial[i].transform) changed.add(i); });
-      if (changed.size === 3) resolve(true);
-      else if (performance.now() - started > 6000) resolve(false);
-      else requestAnimationFrame(observe);
-    };
-    requestAnimationFrame(observe);
-  }));
-  expect(moved).toBe(true);
-  expect(await page.locator(".shop-event-feed").innerText()).toBe(held);
-  await expect(page.locator('[data-robot="shield"]')).toHaveAttribute("data-task", /abc\/retail\/(fridge|camera)\//);
+  await page.clock.runFor(4300);
+  await page.getByRole("button", { name: "Pause shop activity", exact: true }).click();
+  await page.clock.runFor(32);
+  const history = await page.locator(".shop-event-feed").innerText();
+  const positions = await page.locator('[data-shopper]').evaluateAll(people => people.map(p => getComputedStyle(p).transform));
+  await page.clock.runFor(8400);
+  expect(await page.locator(".shop-event-feed").innerText()).toBe(history);
+  expect(await page.locator('[data-shopper]').evaluateAll(people => people.map(p => getComputedStyle(p).transform))).toEqual(positions);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "Play shop activity", exact: true }).click();
+  await page.clock.runFor(4200);
+  expect(await page.locator(".shop-event-feed").innerText()).not.toBe(history);
+  expect(await page.locator('[data-shopper]').evaluateAll(people => people.map(p => getComputedStyle(p).transform))).not.toEqual(positions);
 });
 
-test("reduced motion keeps robots still while scoped events continue", async ({ page }) => {
+test("reduced motion keeps shoppers still while scoped events continue", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await freezeClock(page);
-  await page.goto("?seed=QUIET-ROBOTS");
+  await page.goto("?seed=QUIET-SHOPPERS");
   await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
   await page.getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true }).click();
-  const destinations = await page.locator("[data-robot]").evaluateAll(robots => robots.map(r => r.getAttribute("data-destination")));
+  const destinations = await page.locator("[data-shopper]").evaluateAll(robots => robots.map(r => r.getAttribute("data-destination")));
   await page.clock.runFor(6000);
-  expect(await page.locator("[data-robot]").evaluateAll(robots => robots.map(r => r.getAttribute("data-destination")))).toEqual(destinations);
+  expect(await page.locator("[data-shopper]").evaluateAll(robots => robots.map(r => r.getAttribute("data-destination")))).toEqual(destinations);
   await page.getByRole("button", { name: "Pricing", exact: true }).click();
   await expect(page.locator(".shop-event-row code").first()).toHaveText(/^abc\/retail\/price\/updated\/v1\/fr\/fr-0\/[a-z-]+$/);
 });
@@ -482,14 +478,31 @@ test("store health follows the selected shop and its decisions", async ({ page }
   expect(widths.every(width => width === `${actual}%`)).toBe(true);
 });
 
-test("tiny human shoppers pick items and pay while agents stay outside", async ({ page }) => {
+test("more human shoppers enter, pick, pay, and leave without robot sprites", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("?seed=SHOPPERS");
   await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
   await page.getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true }).click();
-  await expect(page.locator('[data-shopper]')).toHaveCount(4);
+  await expect(page.locator('[data-shopper]')).toHaveCount(12);
   await expect(page.locator('.shopper-item')).not.toHaveCount(0);
   await expect(page.locator('.shopper-payment')).not.toHaveCount(0);
-  const positions = await page.locator('[data-robot]').evaluateAll(robots => robots.map(r => r.getAttribute('data-destination')!.split(',').map(Number)));
-  expect(positions.every(([x,y]) => (x < 160 || x > 690) && y > 380)).toBe(true);
+  await expect(page.locator('[data-robot]')).toHaveCount(0);
+  await expect(page.locator('[data-activity="entering"]')).not.toHaveCount(0);
+  await expect(page.locator('[data-activity="leaving"]')).not.toHaveCount(0);
+});
+
+test("event history retains older timestamps and remains filterable", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await freezeClock(page);
+  await page.goto("?seed=LONG-HISTORY");
+  await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
+  await page.getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true }).click();
+  await page.clock.runFor(42000);
+  await page.getByRole("button", { name: "Pause shop activity", exact: true }).click();
+  expect(await page.locator('.shop-event-row').count()).toBeGreaterThan(80);
+  await expect(page.locator('.shop-event-row code').last()).toHaveText('abc/retail/purchase/completed/v1/fr/fr-0/order-1');
+  await expect(page.locator('.shop-event-row time').first()).toHaveAttribute('datetime', /2026-01-01T/);
+  await page.getByRole("button", { name: "Purchases", exact: true }).click();
+  await expect(page.locator('.shop-event-row code').last()).toHaveText('abc/retail/purchase/completed/v1/fr/fr-0/order-1');
+  expect(await page.locator('.shop-event-row').evaluateAll(rows => rows.every(row => row.getAttribute('data-kind') === 'purchase'))).toBe(true);
 });

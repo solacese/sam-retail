@@ -18,7 +18,7 @@ Examples for Paris Market:
 
 The friendly category buttons use topic subscriptions: Pricing matches `abc/retail/price/*/v1/fr/fr-0/>`; IoT subscribes to both fridge and camera; All matches `abc/retail/*/*/v1/fr/fr-0/>`. The local matcher supports whole-level `*` and terminal `>` with one-or-more trailing levels. It is a demo matcher, not a complete Solace client implementation.
 
-Stocky, Penny, and Shield coordinate from outside the shop and move in response to inventory, purchase, pricing, and sensor events. Human shoppers inside follow shelf → checkout → exit routes driven by the purchase stream, with pickup and payment gestures after arrival. Holding the feed freezes its visible snapshot while shop events and robots continue. Reduced motion keeps robots and shoppers still, preserves pickup/payment poses, and removes flying parcels.
+The illustration shows twelve human shoppers and no robot agents. Shoppers follow outside → entrance → shelves → checkout queue → payment → outside routes driven by the purchase stream, with pickup and payment gestures after arrival. Pause / Play stops event generation and shopper motion, retaining the current positions and interaction progress until resuming. The control is shared across shop views and does not pause the card game. Manager outcomes produced while paused join the feed on resume. History retains the most recent 600 timestamped events, all filterable and scrollable. Reduced motion keeps shoppers still, preserves pickup/payment poses, and removes flying parcels.
 
 The static Pages demo creates events in the browser and bridges game decisions into the shop feed. It does not connect to an external broker. Core correlation rules keep their existing canonical topics.
 

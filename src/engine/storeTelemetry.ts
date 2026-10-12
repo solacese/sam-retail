@@ -28,6 +28,7 @@ export const SIGNAL_TYPES: Record<
   iot: { label: "IoT", color: "#96b7d5", glyph: "°" },
   agents: { label: "Agents", color: "#bca2f5", glyph: "↗" },
 };
+export const STORE_HISTORY_LIMIT = 600;
 const products = ["Milk", "Coffee", "Pasta", "Apples", "Bread", "Lunch bundle"];
 const cycle: SignalKind[] = [
   "purchase",
@@ -39,8 +40,10 @@ const cycle: SignalKind[] = [
   "inventory",
   "iot",
 ];
-export function useStoreTelemetry(shop: Shop | null, game?: GameState | null) {
+export function useStoreTelemetry(shop: Shop | null, game?: GameState | null, paused = false) {
   const [signals, setSignals] = useState<StoreSignal[]>([]);
+  const playback = useRef(paused);
+  useEffect(() => { playback.current = paused; }, [paused]);
   const count = useRef(0);
   const seen = useRef(new Set<string>());
   const visit = useRef({ seed: "", length: -1, epoch: 0 });
@@ -53,6 +56,7 @@ export function useStoreTelemetry(shop: Shop | null, game?: GameState | null) {
     const prices = [1.9, 4.5, 2.4, 3.2, 1.4, 5.9];
     let product = shop.style % products.length;
     const tick = () => {
+      if (playback.current) return;
       const n = ++count.current;
       const kind = cycle[(n - 1) % cycle.length];
       let label = "",
@@ -107,14 +111,14 @@ export function useStoreTelemetry(shop: Shop | null, game?: GameState | null) {
         color: type.color,
         glyph: type.glyph,
       };
-      setSignals((old) => [signal, ...old].slice(0, 80));
+      setSignals((old) => [signal, ...old].slice(0, STORE_HISTORY_LIMIT));
     };
     for (let i = 0; i < 8; i++) tick();
     const timer = window.setInterval(tick, 420);
     return () => clearInterval(timer);
   }, [shop?.id]);
   useEffect(() => {
-    if (!shop || !game) return;
+    if (!shop || !game || paused) return;
     if (
       visit.current.seed !== game.seed ||
       game.history.length < visit.current.length
@@ -143,8 +147,8 @@ export function useStoreTelemetry(shop: Shop | null, game?: GameState | null) {
             glyph: "✓",
           })),
         ...old,
-      ].slice(0, 80),
+      ].slice(0, STORE_HISTORY_LIMIT),
     );
-  }, [shop?.id, game?.history.length, game?.seed]);
+  }, [shop?.id, game?.history.length, game?.seed, paused]);
   return signals;
 }

@@ -1,6 +1,6 @@
 # Ten shop illustrations
 
-Generated with the built-in image generation tool, one image per design. These ten distinct designs are assigned deterministically across the 87 fictional ABC shops. Robot characters and event parcels are animated SVG overlays; no image API is called during play.
+Generated with the built-in image generation tool, one image per design. These ten distinct designs are assigned deterministically across the 87 fictional ABC shops. Human shoppers and event parcels are animated SVG overlays; no image API is called during play.
 
 Optimized WebP assets are saved in `public/shops/`, preserving each generated composition.
 

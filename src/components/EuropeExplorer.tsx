@@ -198,6 +198,8 @@ export function EuropeExplorer({
   country,
   shop,
   signals,
+  paused,
+  onTogglePlayback,
   onCountry,
   onShop,
   onBack,
@@ -207,6 +209,8 @@ export function EuropeExplorer({
   country: Country | null;
   shop: Shop | null;
   signals: StoreSignal[];
+  paused: boolean;
+  onTogglePlayback: () => void;
   onCountry: (c: Country | null) => void;
   onShop: (s: Shop) => void;
   onBack: () => void;
@@ -252,7 +256,7 @@ export function EuropeExplorer({
             They handle the live updates. You help with the tough choices.
           </p>
         </section>
-        <StoreDashboard shop={shop} signals={signals} />
+        <StoreDashboard shop={shop} signals={signals} paused={paused} onTogglePlayback={onTogglePlayback} />
       </main>
     );
   return (

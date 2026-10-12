@@ -192,7 +192,10 @@ export default function App() {
   );
   const [engine, setEngine] = useState<RetailGame | null>(null);
   const [state, setState] = useState<GameState | null>(null);
-  const signals = useStoreTelemetry(selectedShop, state);
+  const [storePaused, setStorePaused] = useState(false);
+  useEffect(() => setStorePaused(false), [selectedShop?.id]);
+  const signals = useStoreTelemetry(selectedShop, state, storePaused);
+  const toggleStore = () => setStorePaused(value => !value);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [feedback, setFeedback] = useState(false);
   const [resultReady, setResultReady] = useState(false);
@@ -356,6 +359,8 @@ export default function App() {
           country={selectedCountry}
           shop={selectedShop}
           signals={signals}
+          paused={storePaused}
+          onTogglePlayback={toggleStore}
           onCountry={(country) => {
             setSelectedCountry(country);
             setSelectedShop(null);
@@ -699,7 +704,7 @@ export default function App() {
           </main>
           {selectedShop && (
             <div className="desktop-store">
-              <StoreDashboard shop={selectedShop} signals={signals} resources={state?.resources} />
+              <StoreDashboard shop={selectedShop} signals={signals} resources={state?.resources} paused={storePaused} onTogglePlayback={toggleStore} />
             </div>
           )}
         </div>
@@ -723,7 +728,7 @@ export default function App() {
           title={`ABC Shop · ${selectedShop.city}`}
           onClose={() => setDialog(null)}
         >
-          <StoreDashboard shop={selectedShop} signals={signals} resources={state?.resources} />
+          <StoreDashboard shop={selectedShop} signals={signals} resources={state?.resources} paused={storePaused} onTogglePlayback={toggleStore} />
         </Modal>
       )}
       {dialog === "menu" && (

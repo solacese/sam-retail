@@ -2974,3 +2974,16 @@ svg {
  .store-stage .isometric-shop { padding-bottom: 95px; }
 }
 @media (prefers-reduced-motion: reduce) { .store-statistic-track i { transition: none; } }
+.feed-toolbar button { display: inline-flex; align-items: center; gap: 7px; }
+.event-row-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.event-row-heading time { color: #9db494; font-size: 12px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.shopper-reach-pick { animation: shopper-reach-pick 1.6s ease-in-out; }
+.shopper-reach-pay { animation: shopper-reach-pay 1.6s ease-in-out; }
+.shopper-item { animation: shopper-pickup 1.6s ease-in-out forwards; }
+.shopper-payment-tick { animation: shopper-paid .4s .8s both; }
+@keyframes shopper-reach-pick { 0%,100% { transform: rotate(0deg); } 35%,65% { transform: rotate(55deg); } }
+@keyframes shopper-reach-pay { 0%,100% { transform: rotate(0deg); } 35%,65% { transform: rotate(-55deg); } }
+@keyframes shopper-pickup { from { transform: translate(-13px,-24px); } 40% { transform: translate(-9px,-20px); } to { transform: translate(8px,-4px); } }
+@keyframes shopper-paid { from { opacity: 0; } to { opacity: 1; } }
+.isometric-shop[data-paused="true"] * { animation-play-state: paused !important; }
+.isometric-shop.scene-still * { animation: none !important; }
