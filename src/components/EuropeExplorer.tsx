@@ -162,9 +162,6 @@ function CountryMap({
                 </g>
               );
             })}
-            <text x="84" y="620" fill="#b8cdb1" fontSize="19" fontWeight="650">
-              Little shops. Big possibilities.
-            </text>
           </g>
         )}
         {shops.map((shop, i) => (
