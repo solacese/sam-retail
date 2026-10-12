@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { motion, useAnimationControls, useReducedMotion } from "motion/react";
+import { motion, useAnimationControls, useMotionValue, useReducedMotion } from "motion/react";
 import type { Shop } from "../data/shops";
 import { shopArtwork } from "../data/shopArtwork";
+import { planShopperWalk } from "./shopperMotion";
 import type { StoreSignal, SignalKind } from "../engine/storeTelemetry";
 
 const shopperRoutes = [
@@ -14,39 +15,43 @@ const activities = ["entering", "browsing", "picking", "queuing", "paying", "lea
 function Shopper({ index, signals, still, paused }: { index: number; signals: StoreSignal[]; still: boolean; paused: boolean }) {
   const purchase = signals.find(s => s.kind === "purchase");
   const sequence = Number(purchase?.id.match(/-live-(\d+)$/)?.[1] ?? 0);
-  const phase = still ? index % 6 : (Math.floor(sequence / 8) + index) % 6;
+  const phase = still ? index % 6 : (Math.floor((sequence + index % 8) / 8) + index) % 6;
   const journey = shopperRoutes[index % shopperRoutes.length];
   const route = journey[phase];
   const offsetX = (Math.floor(index / 4) - 1) * 6, offsetY = (Math.floor(index / 4) % 2) * 5;
   const x = route[0] + offsetX, y = route[1] + offsetY;
   const origin = still ? route : phase === 0 ? journey[5] : phase === 5 ? journey[4] : route;
+  const currentX = useMotionValue(origin[0] + offsetX);
+  const currentY = useMotionValue(origin[1] + offsetY);
+  const opacity = useMotionValue(!still && phase === 0 ? 0 : 1);
   const movement = useAnimationControls();
-  useEffect(() => {
-    if (paused) movement.stop();
-    else void movement.start({ x, y, opacity: still ? 1 : phase === 5 ? [1, 1, 0] : 1,
-      transition: { duration: still ? 0 : 1.4, ease: "easeInOut", times: [0, .8, 1] } });
-    return () => movement.stop();
-  }, [x, y, phase, paused, still, movement]);
   const [arrived, setArrived] = useState(still);
-  const arrival = useRef({ phase, remaining: 1450 });
+  const lastPhase = useRef<number | null>(null);
   useEffect(() => {
-    if (still) { setArrived(true); return; }
-    if (arrival.current.phase !== phase) {
-      arrival.current = { phase, remaining: 1450 };
-      setArrived(false);
+    if (paused) { movement.stop(); return; }
+    if (still) {
+      movement.set({ x, y, opacity: 1 });
+      setArrived(true);
+      return;
     }
-    if (paused || arrival.current.remaining <= 0) return;
-    const started = Date.now();
-    const timer = window.setTimeout(() => { arrival.current.remaining = 0; setArrived(true); }, arrival.current.remaining);
-    return () => {
-      clearTimeout(timer);
-      arrival.current.remaining = Math.max(0, arrival.current.remaining - (Date.now() - started));
-    };
-  }, [phase, still, paused]);
+    const walk = planShopperWalk([currentX.get(), currentY.get()], [x, y], index);
+    const newPhase = lastPhase.current !== phase;
+    lastPhase.current = phase;
+    if (walk.distance < .1) { setArrived(true); return; }
+    setArrived(false);
+    let cancelled = false;
+    const delay = newPhase ? (index % 6) * .035 : 0;
+    void movement.start({ x: walk.x, y: walk.y,
+      opacity: phase === 5 ? [opacity.get(), opacity.get(), 0] : 1,
+      transition: { duration: walk.duration, delay, ease: "linear",
+        opacity: { duration: phase === 5 ? walk.duration : .6, delay, ease: "easeInOut", times: phase === 5 ? [0, .85, 1] : [0, 1] } },
+    }).then(() => { if (!cancelled) setArrived(true); });
+    return () => { cancelled = true; movement.stop(); };
+  }, [x, y, phase, paused, still, index, movement, currentX, currentY, opacity]);
   const skin = ["#b97a50", "#efd0ae", "#8e563c", "#d99b73"][index % 4];
   const shirt = ["#8caec8", "#d4917b", "#c5b477", "#9cb08b", "#b99bc2", "#cfba9d"][index % 6];
   return <motion.g data-shopper={index} data-destination={`${x},${y}`} data-activity={activities[phase]} data-interacting={arrived}
-    initial={{ x: origin[0] + offsetX, y: origin[1] + offsetY, opacity: !still && phase === 0 ? 0 : 1 }} animate={movement}>
+    initial={false} style={{ x: currentX, y: currentY, opacity }} animate={movement}>
     <ellipse cy="2" rx="8" ry="4" fill="#385d4526" />
     <path d="M-3-7l-1 8m7-8l2 8" stroke="#425a57" strokeWidth="3" strokeLinecap="round" />
     <path className={arrived && phase === 2 ? "shopper-reach-pick" : ""} d="M-4-15l-3 7" stroke={skin} strokeWidth="2.5" strokeLinecap="round" style={{ transformOrigin: "-4px -15px" }} />
