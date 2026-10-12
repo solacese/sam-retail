@@ -2963,3 +2963,14 @@ svg {
  .shop-explorer > .store-dashboard { height: 760px; }
  .shop-explorer .store-stage .isometric-shop { height: auto; min-height: 260px; }
 }
+/* Store health replaces the old status captions, without adding a panel. */
+.store-stage .isometric-shop { padding-bottom: 53px; }
+.store-statistics { position: absolute; bottom: 12px; left: 14px; right: 14px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; color: #405f45; }
+.store-statistic span { display: block; font-size: 16px; line-height: 1.5; font-weight: 650; }
+.store-statistic-track { height: 5px; background: #cad2b8; margin-top: 5px; border-radius: 3px; overflow: hidden; }
+.store-statistic-track i { display: block; height: 100%; transition: width .4s; border-radius: inherit; }
+@media (max-width: 700px) {
+ .store-statistics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 18px; }
+ .store-stage .isometric-shop { padding-bottom: 95px; }
+}
+@media (prefers-reduced-motion: reduce) { .store-statistic-track i { transition: none; } }

@@ -76,7 +76,7 @@ test("decisions have no time limit or automatic rejection", async ({
   await expect(page.getByRole("button", { name: /^Approve:/ })).toBeEnabled();
   await expect(page.locator(".card-timer")).toHaveCount(0);
 });
-test("keyboard decisions commit and Space pauses when gameplay has focus", async ({
+test("keyboard decisions work without a pause overlay", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -84,10 +84,8 @@ test("keyboard decisions commit and Space pauses when gameplay has focus", async
   await openGame(page);
   await page.locator(".game-main").focus();
   await page.keyboard.press("Space");
-  await expect(
-    page.getByRole("button", { name: "Resume", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Resume", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Approve:/ })).toBeEnabled();
   await page.keyboard.press("ArrowRight");
   await expect(page.getByText("APPROVED", { exact: true })).toBeVisible();
   await page.clock.runFor(4700);
@@ -445,4 +443,53 @@ test("reduced motion keeps robots still while scoped events continue", async ({ 
   expect(await page.locator("[data-robot]").evaluateAll(robots => robots.map(r => r.getAttribute("data-destination")))).toEqual(destinations);
   await page.getByRole("button", { name: "Pricing", exact: true }).click();
   await expect(page.locator(".shop-event-row code").first()).toHaveText(/^abc\/retail\/price\/updated\/v1\/fr\/fr-0\/[a-z-]+$/);
+});
+
+test("returning from another tab preserves play without a breather screen", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await freezeClock(page);
+  await openGame(page);
+  const title = await page.locator(".decision-card h2").innerText();
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, value: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    Object.defineProperty(document, "hidden", { configurable: true, value: false });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByText("Take a breather.", { exact: true })).toHaveCount(0);
+  await expect(page.locator(".decision-card h2")).toHaveText(title);
+  await expect(page.getByRole("button", { name: /^Approve:/ })).toBeEnabled();
+});
+
+test("store health follows the selected shop and its decisions", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await freezeClock(page);
+  await page.goto("?seed=STORE-STATS");
+  await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
+  await page.getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true }).click();
+  const inventory = page.locator('[data-stat="inventory"] i');
+  const paris = await inventory.getAttribute("style");
+  await page.getByRole("button", { name: "France shops", exact: true }).click();
+  await page.getByRole("button", { name: "Visit ABC Shop Lyon Riverside", exact: true }).click();
+  expect(await inventory.getAttribute("style")).not.toBe(paris);
+  await expect(page.getByRole("group", { name: "Lyon Riverside statistics" })).toBeVisible();
+  await page.getByRole("button", { name: "Help the agents for a week", exact: true }).click();
+  await page.getByRole("button", { name: /^Approve:/ }).click();
+  const actual = await page.getByRole("meter", { name: "Inventory", exact: true }).getAttribute("aria-valuenow");
+  if (test.info().project.name !== "desktop") await page.getByRole("button", { name: "Shop", exact: true }).click();
+  const widths = await page.locator('.store-statistic[data-stat="inventory"] i').evaluateAll(bars => bars.map(bar => (bar as HTMLElement).style.width));
+  expect(widths.every(width => width === `${actual}%`)).toBe(true);
+});
+
+test("tiny human shoppers pick items and pay while agents stay outside", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("?seed=SHOPPERS");
+  await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
+  await page.getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true }).click();
+  await expect(page.locator('[data-shopper]')).toHaveCount(4);
+  await expect(page.locator('.shopper-item')).not.toHaveCount(0);
+  await expect(page.locator('.shopper-payment')).not.toHaveCount(0);
+  const positions = await page.locator('[data-robot]').evaluateAll(robots => robots.map(r => r.getAttribute('data-destination')!.split(',').map(Number)));
+  expect(positions.every(([x,y]) => (x < 160 || x > 690) && y > 380)).toBe(true);
 });

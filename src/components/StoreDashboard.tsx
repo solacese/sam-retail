@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   Radio,
   Snowflake,
-  Camera,
   Package,
   Tag,
   ShoppingBag,
@@ -15,6 +14,8 @@ import {
   type StoreSignal,
 } from "../engine/storeTelemetry";
 import { matchesSubscription, storeSubscriptions } from "../engine/storeTopics";
+import { StoreStats } from "./StoreStats";
+import type { Resources } from "../engine/types";
 import { IsometricShop } from "./IsometricShop";
 const icons = {
   inventory: Package,
@@ -26,9 +27,11 @@ const icons = {
 export function StoreDashboard({
   shop,
   signals,
+  resources,
 }: {
   shop: Shop;
   signals: StoreSignal[];
+  resources?: Resources;
 }) {
   const [filter, setFilter] = useState<SignalKind | "all">("all");
   const [held, setHeld] = useState<StoreSignal[] | null>(null);
@@ -56,14 +59,7 @@ export function StoreDashboard({
       </div>
       <div className="store-stage">
         <IsometricShop shop={shop} signals={signals} />
-        <div className="store-status">
-          <span>
-            <Tag size={14} /> Prices in sync
-          </span>
-          <span>
-            <Camera size={14} /> Store connected
-          </span>
-        </div>
+        <StoreStats shop={shop} resources={resources} />
       </div>
       <div className="feed-toolbar">
         <h3>Events</h3>

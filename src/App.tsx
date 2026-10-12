@@ -12,7 +12,6 @@ import {
   Info,
   Megaphone,
   Package,
-  Pause,
   Play,
   Radio,
   RotateCcw,
@@ -194,7 +193,6 @@ export default function App() {
   const [engine, setEngine] = useState<RetailGame | null>(null);
   const [state, setState] = useState<GameState | null>(null);
   const signals = useStoreTelemetry(selectedShop, state);
-  const [paused, setPaused] = useState(false);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [feedback, setFeedback] = useState(false);
   const [resultReady, setResultReady] = useState(false);
@@ -219,7 +217,6 @@ export default function App() {
     setEngine(next);
     setState(next.snapshot());
     setSeed(next.snapshot().seed);
-    setPaused(false);
     setFeedback(false);
     setResultReady(false);
     setDialog(null);
@@ -231,7 +228,7 @@ export default function App() {
   };
   const decide = useCallback(
     (choice: Choice) => {
-      if (!engine || !state?.proposal || paused || dialog || feedback) return;
+      if (!engine || !state?.proposal || dialog || feedback) return;
       setSwipeDirection(choice === "approve" ? 1 : -1);
       setResultReady(false);
       setState(engine.resolve(choice));
@@ -239,10 +236,10 @@ export default function App() {
       setHoverChoice(null);
       setDragX(0);
     },
-    [engine, state?.proposal, paused, dialog, feedback],
+    [engine, state?.proposal, dialog, feedback],
   );
   useEffect(() => {
-    if (!feedback || !resultReady || paused || dialog) return;
+    if (!feedback || !resultReady || dialog) return;
     const t = window.setTimeout(() => {
       if (engine) {
         setState(engine.nextDecision());
@@ -251,7 +248,7 @@ export default function App() {
       }
     }, 4500);
     return () => clearTimeout(t);
-  }, [feedback, resultReady, engine, paused, dialog]);
+  }, [feedback, resultReady, engine, dialog]);
   useEffect(() => {
     setHoverChoice(null);
     setDragX(0);
@@ -261,25 +258,13 @@ export default function App() {
       !engine ||
       !state?.proposal ||
       state.status !== "playing" ||
-      paused ||
       dialog ||
       feedback
     )
       return;
     const pulse = window.setTimeout(() => setState(engine.livePulse()), 6000);
     return () => clearTimeout(pulse);
-  }, [engine, state?.proposal?.id, state?.status, paused, dialog, feedback]);
-  useEffect(() => {
-    const hide = () => {
-      if (
-        document.hidden &&
-        (state?.status === "playing" || state?.status === "report")
-      )
-        setPaused(true);
-    };
-    document.addEventListener("visibilitychange", hide);
-    return () => document.removeEventListener("visibilitychange", hide);
-  }, [state?.status]);
+  }, [engine, state?.proposal?.id, state?.status, dialog, feedback]);
   useEffect(() => {
     if (state && (state.status === "won" || state.status === "lost")) {
       const old = readBest(state.mode);
@@ -299,8 +284,8 @@ export default function App() {
   }, [state?.status, state?.score.total, state?.mode]);
   useEffect(() => setBest(readBest(mode)), [mode]);
   useEffect(() => {
-    if (state && !paused && !dialog) gameRef.current?.focus();
-  }, [paused, dialog, state?.proposal?.id]);
+    if (state && !dialog) gameRef.current?.focus();
+  }, [dialog, state?.proposal?.id]);
   const share = async () => {
     if (!state) return;
     const url = new URL(window.location.href);
@@ -324,7 +309,6 @@ export default function App() {
     setSelectedCountry(null);
     setState(null);
     setEngine(null);
-    setPaused(false);
     setFeedback(false);
     setResultReady(false);
     setDialog(null);
@@ -352,15 +336,6 @@ export default function App() {
     if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
       e.preventDefault();
       decide(e.key === "ArrowRight" ? "approve" : "reject");
-    }
-    if (
-      e.code === "Space" &&
-      e.target === e.currentTarget &&
-      state &&
-      !dialog
-    ) {
-      e.preventDefault();
-      setPaused((v) => !v);
     }
   };
   const lastReport = state?.reports.at(-1);
@@ -551,7 +526,7 @@ export default function App() {
                     onFocus={() => setHoverChoice("reject")}
                     onBlur={() => setHoverChoice(null)}
                     onClick={() => decide("reject")}
-                    disabled={feedback || !p || paused || !!dialog}
+                    disabled={feedback || !p || !!dialog}
                     aria-label={`Reject: ${p?.template.rejectLabel ?? "Decision committed"}`}
                   >
                     <strong>
@@ -565,7 +540,7 @@ export default function App() {
                     onFocus={() => setHoverChoice("approve")}
                     onBlur={() => setHoverChoice(null)}
                     onClick={() => decide("approve")}
-                    disabled={feedback || !p || paused || !!dialog}
+                    disabled={feedback || !p || !!dialog}
                     aria-label={`Approve: ${p?.template.approveLabel ?? "Decision committed"}`}
                   >
                     <strong>
@@ -724,7 +699,7 @@ export default function App() {
           </main>
           {selectedShop && (
             <div className="desktop-store">
-              <StoreDashboard shop={selectedShop} signals={signals} />
+              <StoreDashboard shop={selectedShop} signals={signals} resources={state?.resources} />
             </div>
           )}
         </div>
@@ -748,7 +723,7 @@ export default function App() {
           title={`ABC Shop · ${selectedShop.city}`}
           onClose={() => setDialog(null)}
         >
-          <StoreDashboard shop={selectedShop} signals={signals} />
+          <StoreDashboard shop={selectedShop} signals={signals} resources={state?.resources} />
         </Modal>
       )}
       {dialog === "menu" && (
@@ -815,34 +790,6 @@ export default function App() {
           </nav>
         </Modal>
       )}
-      {paused && !dialog && (
-        <Modal
-          title="Paused"
-          onClose={() => {
-            setPaused(false);
-            gameRef.current?.focus();
-          }}
-        >
-          <div className="pause-art">
-            <AgentAvatar id="SAM" large />
-          </div>
-          <h2>Take a breather.</h2>
-          <p>The store can wait.</p>
-          <button
-            className="primary-button"
-            autoFocus
-            onClick={() => {
-              setPaused(false);
-              gameRef.current?.focus();
-            }}
-          >
-            Resume <Play size={16} />
-          </button>
-          <button className="text-button" onClick={() => setDialog("restart")}>
-            Restart shift
-          </button>
-        </Modal>
-      )}
       {dialog === "tutorial" && (
         <Modal title="How to play" onClose={() => setDialog(null)}>
           <h2>
@@ -863,17 +810,17 @@ export default function App() {
               </span>
             </li>
             <li>
-              <Pause size={18} />
+              <Info size={18} />
               <span>
                 There is no time limit. Think it through. Days wait for you to
-                continue. Space pauses live updates.
+                continue.
               </span>
             </li>
             <li>
               <ScanLine size={18} />
               <span>
                 Menu → “Why this card?” reveals the agents’ disagreement and the
-                events behind it. Reading panels pauses the clock.
+                events behind it. Reading panels holds the current card.
               </span>
             </li>
             <li>
