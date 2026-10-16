@@ -1,1067 +1,787 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
-  ArrowDown,
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  Activity,
   ArrowRight,
-  ArrowUp,
-  ArrowUpRight,
+  Box,
   Check,
-  ChevronDown,
-  Coins,
-  Copy,
-  Info,
-  Megaphone,
-  Package,
+  ChevronRight,
+  CircleHelp,
+  Clock3,
+  Globe2,
+  Leaf,
+  Maximize2,
+  Pause,
   Play,
   Radio,
   RotateCcw,
-  ScanLine,
-  ShieldCheck,
-  ShoppingBag,
-  Trophy,
+  ShoppingBasket,
+  Sparkles,
+  Store,
+  Users,
   X,
-  Zap,
 } from "lucide-react";
 import {
-  RetailGame,
-  RESOURCE_KEYS,
-  rankFor,
-  profitTarget,
-} from "./engine/game";
-import { AGENTS } from "./engine/situations";
-import type {
-  AgentId,
-  Choice,
-  GameState,
-  GameMode,
-  Resource,
-  Resources,
-} from "./engine/types";
-import { AgentAvatar } from "./components/Illustrations";
-import { EventStream } from "./components/EventStream";
-import { Modal } from "./components/Modal";
-import { SwipeCard } from "./components/SwipeCard";
-import { EuropeExplorer } from "./components/EuropeExplorer";
-import { StoreDashboard } from "./components/StoreDashboard";
-import { COUNTRIES, shopById, type Country, type Shop } from "./data/shops";
-import { useStoreTelemetry } from "./engine/storeTelemetry";
-const ICONS = {
-  inventory: Package,
-  security: ShieldCheck,
-  reputation: Megaphone,
-  cash: Coins,
-};
-const LABELS = {
-  inventory: "Inventory",
-  security: "Security",
-  reputation: "Reputation",
-  cash: "Cash",
-};
-const DEMO_MODELS: Record<AgentId, string> = {
-  SAM: "GPT",
-  STOCKY: "Claude",
-  PENNY: "Claude",
-  SHIELD: "GPT",
-  SPARK: "Gemini",
-};
-const COLORS = {
-  inventory: "#8ed4ba",
-  security: "#96b7d5",
-  reputation: "#ddaaa9",
-  cash: "#e2c485",
-};
-type Dialog =
-  | "menu"
-  | "tutorial"
-  | "xray"
-  | "architecture"
-  | "restart"
-  | "events"
-  | "shop"
-  | "liveShop"
-  | null;
+  DEPARTMENTS,
+  evidence,
+  metrics,
+  stock,
+  type Category,
+  type DecisionKind,
+  type StoreState,
+} from "./simulation/store";
+import { useSimulation } from "./simulation/useSimulation";
+import { EuropeNetwork } from "./shop/EuropeNetwork";
+const StoreScene = lazy(() => import("./shop/StoreScene"));
 const money = (n: number) =>
-  new Intl.NumberFormat("en-US", {
+  new Intl.NumberFormat("en-IE", {
     style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(n);
-function readBest(mode: string) {
-  try {
-    return Number(localStorage.getItem(`minimart-best-${mode}`)) || 0;
-  } catch {
-    return 0;
-  }
-}
-function makeSeed() {
-  return `MM-${crypto.getRandomValues(new Uint32Array(1))[0].toString(36).toUpperCase().slice(0, 7)}`;
-}
-function ResourcesBar({
-  resources,
-  preview,
+    currency: "EUR",
+    maximumFractionDigits: 2,
+  }).format(n / 100);
+const clock = (n: number) =>
+  `${String(9 + Math.floor(n / 3600)).padStart(2, "0")}:${String(Math.floor(n / 60) % 60).padStart(2, "0")}:${String(Math.floor(n) % 60).padStart(2, "0")}`;
+const categoryLabels: Record<Category, string> = {
+  inventory: "Inventory",
+  pricing: "Pricing",
+  purchases: "Purchases",
+  iot: "IoT",
+  agents: "Agents",
+  operations: "Operations",
+};
+function Dialog({
+  title,
+  children,
+  onClose,
+  wide = false,
 }: {
-  resources: Resources;
-  preview?: Resources;
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+  wide?: boolean;
 }) {
+  const ref = useRef<HTMLDialogElement>(null!);
+  useEffect(() => {
+    const el = ref.current;
+    el.showModal();
+    return () => {
+      el.close();
+    };
+  }, []);
   return (
-    <div className="resources-bar">
-      {RESOURCE_KEYS.map((k) => {
-        const Icon = ICONS[k],
-          n = Math.round(resources[k]),
-          delta = preview?.[k] ?? 0;
-        return (
-          <div
-            className={`resource ${n < 25 ? "critical" : ""}`}
-            key={k}
-            style={{ "--resource-color": COLORS[k] } as React.CSSProperties}
-            title={`${LABELS[k]}: ${n < 25 ? "critical" : n < 50 ? "strained" : "healthy"}${delta ? `. ${delta > 0 ? "Increases" : "Decreases"} with this choice.` : ""}`}
-          >
-            <span className="resource-icon">
-              <Icon size={23} strokeWidth={1.6} />
-              {delta !== 0 && (
-                <span
-                  className={`resource-preview ${delta > 0 ? "up" : "down"}`}
-                >
-                  {delta > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-                </span>
-              )}
-            </span>
-            <span className="resource-label">{LABELS[k]}</span>
-            <div
-              className="resource-track"
-              role="meter"
-              aria-label={LABELS[k]}
-              aria-valuenow={n}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
-              <motion.div
-                animate={{ width: `${n}%` }}
-                transition={{ duration: 0.4 }}
-              />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-function ScoreFormula({ state }: { state: GameState }) {
-  return (
-    <div className="score-formula">
-      {[
-        ["Survival", state.score.survival, 3500],
-        ["Resource balance", state.score.balance, 2000],
-        ["Profitability", state.score.profit, 1500],
-        ["Customer happiness", state.score.customers, 1000],
-        ["Crisis management", state.score.crises, 1000],
-        ["Agent collaboration", state.score.collaboration, 1000],
-      ].map(([label, n, max]) => (
-        <div key={label}>
-          <span>{label}</span>
-          <span>
-            {Number(n).toLocaleString()}{" "}
-            <small>/ {Number(max).toLocaleString()}</small>
-          </span>
-        </div>
-      ))}
-      <div>
-        <span>Stockout, fraud & waste penalties</span>
-        <span>−{state.score.penalties}</span>
-      </div>
-    </div>
-  );
-}
-export default function App() {
-  const query = new URLSearchParams(window.location.search);
-  const [seed, setSeed] = useState(query.get("seed")?.slice(0, 64) || makeSeed);
-  const [mode] = useState<GameMode>(
-    query.get("mode") === "quick"
-      ? "quick"
-      : query.get("mode") === "full"
-        ? "full"
-        : "week",
-  );
-  const [selectedShop, setSelectedShop] = useState<Shop | null>(
-    () => shopById(query.get("shop")) ?? null,
-  );
-  const [selectedCountry, setSelectedCountry] = useState<Country | null>(
-    () =>
-      COUNTRIES.find((c) => c.id === shopById(query.get("shop"))?.countryId) ??
-      null,
-  );
-  const [engine, setEngine] = useState<RetailGame | null>(null);
-  const [state, setState] = useState<GameState | null>(null);
-  const [storePaused, setStorePaused] = useState(false);
-  useEffect(() => setStorePaused(false), [selectedShop?.id]);
-  const signals = useStoreTelemetry(selectedShop, state, storePaused);
-  const toggleStore = () => setStorePaused(value => !value);
-  const [dialog, setDialog] = useState<Dialog>(null);
-  const [feedback, setFeedback] = useState(false);
-  const [resultReady, setResultReady] = useState(false);
-  const [swipeDirection, setSwipeDirection] = useState(1);
-  const [best, setBest] = useState(readBest(mode));
-  const [copied, setCopied] = useState(false);
-  const [shareText, setShareText] = useState("");
-  const [hoverChoice, setHoverChoice] = useState<"approve" | "reject" | null>(
-    null,
-  );
-  const [dragX, setDragX] = useState(0);
-  const [sessionBest, setSessionBest] = useState(false);
-  const gameRef = useRef<HTMLElement>(null);
-  const reduced = useReducedMotion();
-  const start = (newSeed = seed) => {
-    const next = new RetailGame(
-      newSeed.trim() || makeSeed(),
-      mode,
-      undefined,
-      selectedShop?.perks ?? [],
-    );
-    setEngine(next);
-    setState(next.snapshot());
-    setSeed(next.snapshot().seed);
-    setFeedback(false);
-    setResultReady(false);
-    setDialog(null);
-    setBest(readBest(mode));
-    setSessionBest(false);
-    setCopied(false);
-    setShareText("");
-    setTimeout(() => gameRef.current?.focus(), 0);
-  };
-  const decide = useCallback(
-    (choice: Choice) => {
-      if (!engine || !state?.proposal || dialog || feedback) return;
-      setSwipeDirection(choice === "approve" ? 1 : -1);
-      setResultReady(false);
-      setState(engine.resolve(choice));
-      setFeedback(true);
-      setHoverChoice(null);
-      setDragX(0);
-    },
-    [engine, state?.proposal, dialog, feedback],
-  );
-  useEffect(() => {
-    if (!feedback || !resultReady || dialog) return;
-    const t = window.setTimeout(() => {
-      if (engine) {
-        setState(engine.nextDecision());
-        setFeedback(false);
-        gameRef.current?.focus();
-      }
-    }, 4500);
-    return () => clearTimeout(t);
-  }, [feedback, resultReady, engine, dialog]);
-  useEffect(() => {
-    setHoverChoice(null);
-    setDragX(0);
-  }, [state?.proposal?.id]);
-  useEffect(() => {
-    if (
-      !engine ||
-      !state?.proposal ||
-      state.status !== "playing" ||
-      dialog ||
-      feedback
-    )
-      return;
-    const pulse = window.setTimeout(() => setState(engine.livePulse()), 6000);
-    return () => clearTimeout(pulse);
-  }, [engine, state?.proposal?.id, state?.status, dialog, feedback]);
-  useEffect(() => {
-    if (state && (state.status === "won" || state.status === "lost")) {
-      const old = readBest(state.mode);
-      if (state.score.total > old) {
-        try {
-          localStorage.setItem(
-            `minimart-best-${state.mode}`,
-            String(state.score.total),
-          );
-        } catch {
-          /* Storage is optional. */
-        }
-        setBest(state.score.total);
-        setSessionBest(true);
-      }
-    }
-  }, [state?.status, state?.score.total, state?.mode]);
-  useEffect(() => setBest(readBest(mode)), [mode]);
-  useEffect(() => {
-    if (state && !dialog) gameRef.current?.focus();
-  }, [dialog, state?.proposal?.id]);
-  const share = async () => {
-    if (!state) return;
-    const url = new URL(window.location.href);
-    url.search = `?seed=${encodeURIComponent(state.seed)}&mode=${state.mode}${selectedShop ? `&shop=${selectedShop.id}` : ""}`;
-    const text = `I scored ${state.score.total.toLocaleString()}/10,000 in ABC Shop! ${rankFor(state.score.total)}. Can you beat my shift? Seed: ${state.seed}\n${url}`;
-    try {
-      if (navigator.share)
-        await navigator.share({
-          title: "ABC Shop",
-          text,
-          url: url.toString(),
-        });
-      else await navigator.clipboard.writeText(text);
-      setCopied(true);
-    } catch {
-      setShareText(text);
-    }
-  };
-  const home = () => {
-    setSelectedShop(null);
-    setSelectedCountry(null);
-    setState(null);
-    setEngine(null);
-    setFeedback(false);
-    setResultReady(false);
-    setDialog(null);
-    setSeed(makeSeed());
-  };
-  const p = state?.proposal;
-  const playing = Boolean(state && (state.status === "playing" || feedback));
-  const end =
-    state && (state.status === "won" || state.status === "lost") && !feedback;
-  const preview = p
-    ? p.template[
-        dragX > 20
-          ? "approve"
-          : dragX < -20
-            ? "reject"
-            : (hoverChoice ?? p.suggested)
-      ].delta
-    : undefined;
-  const keyDown = (e: React.KeyboardEvent) => {
-    if (
-      e.target instanceof HTMLInputElement ||
-      e.target instanceof HTMLTextAreaElement
-    )
-      return;
-    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-      e.preventDefault();
-      decide(e.key === "ArrowRight" ? "approve" : "reject");
-    }
-  };
-  const lastReport = state?.reports.at(-1);
-  return (
-    <div
-      className={`app-shell ${state ? "in-game week-mode" : "in-lobby explore-mode"}`}
+    <dialog
+      ref={ref}
+      className={wide ? "dialog wide-dialog" : "dialog"}
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      aria-label={title}
     >
-      <header className="site-header">
+      <header className="dialog-heading">
+        <h2>{title}</h2>
         <button
-          className="wordmark"
-          onClick={() => (state ? setDialog("restart") : home())}
+          className="icon-button"
+          aria-label="Close dialog"
+          onClick={onClose}
         >
-          ABC Shop
+          <X size={22} />
         </button>
       </header>
-      {!state && (
-        <EuropeExplorer
-          country={selectedCountry}
-          shop={selectedShop}
-          signals={signals}
-          paused={storePaused}
-          onTogglePlayback={toggleStore}
-          onCountry={(country) => {
-            setSelectedCountry(country);
-            setSelectedShop(null);
-          }}
-          onShop={setSelectedShop}
-          onBack={() => setSelectedShop(null)}
-          onStart={() => start()}
-          visitLabel={
-            mode === "week"
-              ? "Help the agents for a week"
-              : mode === "full"
-                ? "Help the agents for five days"
-                : "Help the agents for three days"
-          }
-        />
-      )}
-      {state && (
-        <div className="play-layout">
-          <main
-            ref={gameRef}
-            tabIndex={0}
-            onKeyDown={keyDown}
-            className="game-main"
-            aria-label="ABC Shop gameplay"
-          >
-            <ResourcesBar
-              resources={state.resources}
-              preview={
-                Math.abs(dragX) > 20 || hoverChoice ? preview : undefined
-              }
-            />
-            {playing && (
-              <>
-                <div className="card-stack">
-                  <div className="stack-back" />
-                  <AnimatePresence
-                    mode={reduced ? "sync" : "wait"}
-                    custom={swipeDirection}
-                  >
-                    {feedback && state.lastResult ? (
-                      <motion.div
-                        className="game-card result-card"
-                        ref={(node) => {
-                          if (node) setResultReady(true);
-                        }}
-                        key={`result-${state.history.length}`}
-                        initial={reduced ? false : { opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={reduced ? undefined : { opacity: 0 }}
-                      >
-                        <div
-                          className={`result-mark ${state.lastResult.choice}`}
-                        >
-                          {state.lastResult.choice === "approve" ? (
-                            <Check size={27} />
-                          ) : (
-                            <X size={27} />
-                          )}
-                        </div>
-                        <span className="character-name">
-                          {state.lastResult.choice === "approve"
-                            ? "APPROVED"
-                            : state.lastResult.choice === "timeout"
-                              ? "TIME’S UP · REJECTED"
-                              : "REJECTED"}
-                        </span>
-                        <h2>{state.lastResult.title}</h2>
-                        <p>{state.lastResult.outcome}</p>
-                        <div className="result-deltas">
-                          {RESOURCE_KEYS.filter(
-                            (k) => state.lastResult!.delta[k] !== 0,
-                          ).map((k) => {
-                            const Icon = ICONS[k],
-                              d = state.lastResult!.delta[k];
-                            return (
-                              <span
-                                key={k}
-                                className={d > 0 ? "positive" : "negative"}
-                              >
-                                <Icon size={16} />
-                                {d > 0 ? (
-                                  <ArrowUp size={13} />
-                                ) : (
-                                  <ArrowDown size={13} />
-                                )}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </motion.div>
-                    ) : (
-                      p && (
-                        <SwipeCard
-                          key={p.id}
-                          reduced={Boolean(reduced)}
-                          agentColor={AGENTS[p.template.agent].color}
-                          onDragX={setDragX}
-                          onChoose={decide}
-                        >
-                          <div className="portrait-scene">
-                            <img
-                              className="generated-portrait"
-                              src={`${import.meta.env.BASE_URL}portraits/${p.template.agent.toLowerCase()}.png`}
-                              alt={`${p.template.agent}, ${AGENTS[p.template.agent].role}`}
-                              draggable={false}
-                            />
-                            {p.crisis && (
-                              <span className="crisis-label">
-                                CLOSING-TIME CRISIS
-                              </span>
-                            )}
-                            <div className="portrait-title">
-                              <strong>{p.template.agent}</strong>
-                              <span>{AGENTS[p.template.agent].role}</span>
-                            </div>
-                            {Math.abs(dragX) > 20 && (
-                              <span
-                                className={`swipe-answer ${dragX > 0 ? "yes" : "no"}`}
-                              >
-                                {dragX > 0
-                                  ? p.template.approveLabel
-                                  : p.template.rejectLabel}
-                              </span>
-                            )}
-                          </div>
-                          <div className="card-copy">
-                            <h2>{p.template.title}</h2>
-                            <p>{p.template.situation}</p>
-                            <div className="card-context">
-                              <div>
-                                <strong>Events</strong>
-                                <span>
-                                  {[
-                                    ...new Set(
-                                      p.evidence.map((e) => e.event.topic),
-                                    ),
-                                  ]
-                                    .slice(0, 2)
-                                    .map((topic) =>
-                                      topic.split("/").slice(-2).join("/"),
-                                    )
-                                    .join(" + ")}
-                                </span>
-                              </div>
-                              <div>
-                                <strong>Agents</strong>
-                                <span>
-                                  {[
-                                    ...new Set([
-                                      DEMO_MODELS[p.template.agent],
-                                      DEMO_MODELS[p.template.peer],
-                                    ]),
-                                  ].join(" + ")}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </SwipeCard>
-                      )
-                    )}
-                  </AnimatePresence>
-                </div>
-                <div className="decision-buttons">
-                  <button
-                    className="choice reject"
-                    onPointerEnter={() => setHoverChoice("reject")}
-                    onPointerLeave={() => setHoverChoice(null)}
-                    onFocus={() => setHoverChoice("reject")}
-                    onBlur={() => setHoverChoice(null)}
-                    onClick={() => decide("reject")}
-                    disabled={feedback || !p || !!dialog}
-                    aria-label={`Reject: ${p?.template.rejectLabel ?? "Decision committed"}`}
-                  >
-                    <strong>
-                      {p?.template.rejectLabel ?? "Decision committed"}
-                    </strong>
-                  </button>
-                  <button
-                    className="choice approve"
-                    onPointerEnter={() => setHoverChoice("approve")}
-                    onPointerLeave={() => setHoverChoice(null)}
-                    onFocus={() => setHoverChoice("approve")}
-                    onBlur={() => setHoverChoice(null)}
-                    onClick={() => decide("approve")}
-                    disabled={feedback || !p || !!dialog}
-                    aria-label={`Approve: ${p?.template.approveLabel ?? "Decision committed"}`}
-                  >
-                    <strong>
-                      {p?.template.approveLabel ?? "On to the next event"}
-                    </strong>
-                  </button>
-                </div>
-              </>
-            )}
-            {state.status === "report" && !feedback && (
-              <section className="game-card report-card">
-                <div className="report-symbol">✦</div>
-                <span className="character-name">DAY {state.day} COMPLETE</span>
-                <h2>Still in business.</h2>
-                <p>
-                  The shutters are down.
-                  <br />
-                  Your next shift is calling.
-                </p>
-                <div className="report-grid">
-                  {[
-                    ["Revenue", money(lastReport!.revenue)],
-                    ["Profit", money(lastReport!.profit)],
-                    ["Stockouts", lastReport!.stockouts],
-                    ["Fraud incidents", lastReport!.fraud],
-                    ["Satisfaction", `${lastReport!.satisfaction}%`],
-                    ["Agent interventions", lastReport!.interventions],
-                  ].map(([label, value]) => (
-                    <div key={label}>
-                      <span>{label}</span>
-                      <strong>{value}</strong>
-                    </div>
-                  ))}
-                </div>
-                <div className="daily-score">
-                  <span>Day’s score</span>
-                  <strong>
-                    {lastReport!.score >= 0 ? "+" : ""}
-                    {lastReport!.score.toLocaleString()}
-                  </strong>
-                </div>
-                <p className="unlock">
-                  <Zap size={12} />
-                  {state.day === 1
-                    ? "Stock monitoring unlocked"
-                    : state.day === 2
-                      ? "Security alerts unlocked"
-                      : "Marketing guardrails unlocked"}
-                </p>
-                <button
-                  className="primary-button"
-                  onClick={() => {
-                    if (engine) {
-                      setState(engine.nextDay());
-                      gameRef.current?.focus();
-                    }
-                  }}
-                >
-                  Open day {state.day + 1}
-                  <ArrowRight size={16} />
-                </button>
-              </section>
-            )}
-            {end && (
-              <section className="game-card end-card">
-                <Trophy size={28} />
-                <span className="character-name">
-                  {state.status === "won"
-                    ? state.mode === "week"
-                      ? "WEEK COMPLETE"
-                      : "SHIFT COMPLETE"
-                    : "SHOP CLOSED"}
-                </span>
-                <h2>
-                  {state.status === "won"
-                    ? "ABC Shop is still open."
-                    : `${LABELS[state.failure!]} hit zero.`}
-                </h2>
-                <p>{rankFor(state.score.total)}</p>
-                <div className="final-score">
-                  {state.score.total.toLocaleString()}
-                  <small>/ 10,000</small>
-                </div>
-                {sessionBest && (
-                  <span className="new-best">NEW PERSONAL BEST</span>
-                )}
-                <details className="score-details">
-                  <summary>
-                    The story of your shift <ChevronDown size={12} />
-                  </summary>
-                  <div className="end-insights">
-                    <p>
-                      <strong>Best call</strong>
-                      {
-                        [...state.history].sort((a, b) => b.score - a.score)[0]
-                          ?.title
-                      }
-                    </p>
-                    <p>
-                      <strong>Hardest lesson</strong>
-                      {
-                        [...state.history].sort((a, b) => a.score - b.score)[0]
-                          ?.title
-                      }
-                    </p>
-                    <p>
-                      <strong>Biggest crisis</strong>
-                      {[...state.history]
-                        .filter((h) => h.crisis)
-                        .sort((a, b) => a.score - b.score)[0]?.title ??
-                        "Your first shift’s growing pains"}
-                    </p>
-                    <p>
-                      <strong>Business impact</strong>
-                      {money(state.profit)} profit · {state.interventions}{" "}
-                      interventions
-                    </p>
-                  </div>
-                  <ScoreFormula state={state} />
-                  <p className="formula-note">
-                    Survival & balance scale with decisions completed. Profit
-                    caps at {money(profitTarget(state.mode))}. Crises and
-                    collaboration scale with your mode. Penalties: 65 per
-                    stockout, 50 per fraud incident, 8 per wasted unit.
-                  </p>
-                </details>
-                <button
-                  className="primary-button"
-                  onClick={() => start(makeSeed())}
-                >
-                  One more shift <RotateCcw size={16} />
-                </button>
-                <div className="replay-actions">
-                  <button onClick={() => start(state.seed)}>Same seed</button>
-                  <button onClick={share}>
-                    <Copy size={12} />
-                    {copied ? "Shared!" : "Share score"}
-                  </button>
-                </div>
-                {shareText && (
-                  <textarea
-                    aria-label="Copy score summary"
-                    className="share-fallback"
-                    readOnly
-                    value={shareText}
-                  />
-                )}
-                <small className="end-best">
-                  Personal best: {best.toLocaleString()}
-                </small>
-                <button className="text-button" onClick={home}>
-                  Back to Europe
-                </button>
-              </section>
-            )}
-          </main>
-          {selectedShop && (
-            <div className="desktop-store">
-              <StoreDashboard shop={selectedShop} signals={signals} resources={state?.resources} paused={storePaused} onTogglePlayback={toggleStore} />
+      {children}
+    </dialog>
+  );
+}
+function Inspector({
+  id,
+  state,
+  onClose,
+}: {
+  id: string;
+  state: StoreState;
+  onClose: () => void;
+}) {
+  const department = DEPARTMENTS.find((d) => d.id === id),
+    products = state.products.filter((p) => p.department === id),
+    m = metrics(state);
+  const names: Record<string, string> = {
+    stockroom: "Stockroom",
+    receiving: "Receiving",
+    checkouts: "Checkouts",
+    pickup: "Order collection",
+  };
+  return (
+    <section className="inspector">
+      <div className="section-heading">
+        <span className="eyebrow">STORE INSPECTOR</span>
+        <button
+          className="icon-button"
+          onClick={onClose}
+          aria-label="Close inspector"
+        >
+          <X size={17} />
+        </button>
+      </div>
+      <h2>{department?.name ?? names[id]}</h2>
+      {department ? (
+        <>
+          <p className="muted">
+            {department.kind === "fridge"
+              ? `${state.fridge.toFixed(1)}°C · safely chilled`
+              : "Shelf and backroom stock, updated as people shop."}
+          </p>
+          <div className="product-table">
+            <div className="product-row table-head">
+              <span>Product / price</span>
+              <span>Shelf</span>
+              <span>Back</span>
             </div>
+            {products.map((p) => {
+              const n = stock(state, p.id),
+                expiry = Math.min(
+                  ...state.batches
+                    .filter((b) => b.productId === p.id && b.shelf > 0)
+                    .map((b) => b.expiresAt),
+                );
+              return (
+                <div className="product-row" key={p.id}>
+                  <span>
+                    <strong>{p.name}</strong>
+                    <small>
+                      {money(p.price)}
+                      {state.mealActive && id === "bakery" ? " · deal" : ""}
+                      {expiry < 600
+                        ? ` · ${Math.max(0, Math.ceil((expiry - state.time) / 60))}m to expiry`
+                        : ""}
+                    </small>
+                  </span>
+                  <b className={n.shelf < 6 ? "low-stock" : ""}>{n.shelf}</b>
+                  <span>{n.backroom}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="inspector-note">
+            <Radio size={15} /> One price across shelf, checkout & online.
+          </div>
+        </>
+      ) : id === "checkouts" ? (
+        <>
+          <p className="muted">
+            {m.queue} shoppers waiting · average wait {Math.round(m.wait)}s
+          </p>
+          {state.checkouts.map((open, i) => (
+            <div className="detail-line" key={i}>
+              <span>Checkout {i + 1}</span>
+              <strong>{open ? "Open" : "Closed"}</strong>
+            </div>
+          ))}
+          <p className="fine-print">
+            Additional staffing cost: {money(state.operatingCosts)}
+          </p>
+        </>
+      ) : id === "pickup" ? (
+        <>
+          <p className="muted">
+            {state.onlineComplete
+              ? "The pantry order is ready for collection."
+              : "A four-item pantry order is waiting for a colleague."}
+          </p>
+          <div className="detail-line">
+            <span>Orders completed</span>
+            <strong>{state.onlineComplete}</strong>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="muted">
+            {id === "receiving"
+              ? "Deliveries are checked in, then moved to backroom stock."
+              : "Reserve stock is available for colleague-led replenishment."}
+          </p>
+          <div className="detail-line">
+            <span>
+              {id === "receiving" ? "At receiving" : "Backroom units"}
+            </span>
+            <strong>
+              {state.batches.reduce(
+                (n, b) => n + (id === "receiving" ? b.receiving : b.backroom),
+                0,
+              )}
+            </strong>
+          </div>
+          <div className="detail-line">
+            <span>Colleagues available</span>
+            <strong>
+              {
+                state.people.filter(
+                  (p) => p.role === "employee" && p.id >= 102 && !p.taskId,
+                ).length
+              }{" "}
+              / 8
+            </strong>
+          </div>
+          <div className="detail-line">
+            <span>Deliveries received</span>
+            <strong>{state.deliveryCount}</strong>
+          </div>
+          <p className="fine-print">
+            Next delivery follows the store schedule, every 75 seconds.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+function actionStatus(state: StoreState, id: DecisionKind) {
+  if (id === "meal") return "Bakery deal is live";
+  const task = state.tasks.find((t) => t.id === `task-${id}`);
+  if (task?.stage !== "complete")
+    return id === "checkout"
+      ? "Colleague on the way"
+      : id === "online"
+        ? "Order being picked"
+        : "Replenishment underway";
+  return id === "checkout"
+    ? "Checkout 3 is open"
+    : id === "online"
+      ? "Ready for collection"
+      : "Shelf replenished";
+}
+export default function App() {
+  const [panel, setPanel] = useState<
+      "events" | "europe" | "help" | "reset" | null
+    >(null),
+    [decision, setDecision] = useState<DecisionKind | null>(null),
+    [selected, setSelected] = useState<string | null>(null),
+    [cameraReset, setCameraReset] = useState(0),
+    [category, setCategory] = useState<Category | "all">("all"),
+    [notice, setNotice] = useState("");
+  const sim = useSimulation(
+      !!decision || panel === "europe" || panel === "help" || panel === "reset",
+    ),
+    s = sim.snapshot,
+    m = metrics(s);
+  const rec = s.recommendations.find((r) => r.id === decision);
+  useEffect(() => {
+    if (!notice) return;
+    const id = setTimeout(() => setNotice(""), 5000);
+    return () => clearTimeout(id);
+  }, [notice]);
+  const recent = s.events[0];
+  return (
+    <div className="app">
+      <header className="app-header">
+        <a
+          className="brand"
+          href={import.meta.env.BASE_URL}
+          aria-label="ABC Shop home"
+        >
+          <span className="brand-mark">
+            <Store size={24} />
+          </span>
+          <span>
+            ABC Shop<small>Paris Flagship</small>
+          </span>
+        </a>
+        <div className="header-status">
+          <span className="status-dot" />
+          <span>
+            Connected by <b>Solace</b>
+          </span>
+        </div>
+        <nav aria-label="Store views">
+          <button
+            aria-label="Europe"
+            className={panel === "europe" ? "nav-button active" : "nav-button"}
+            onClick={() => setPanel("europe")}
+          >
+            <Globe2 size={19} />
+            <span>Europe</span>
+          </button>
+          <button
+            className="nav-button"
+            aria-label="Events"
+            onClick={() => setPanel("events")}
+          >
+            <Activity size={19} />
+            <span>Events</span>
+          </button>
+          <button
+            className="icon-button"
+            aria-label="How to play"
+            onClick={() => setPanel("help")}
+          >
+            <CircleHelp size={20} />
+          </button>
+        </nav>
+      </header>
+      <section className="kpi-strip" aria-label="Live store performance">
+        <div className="kpi">
+          <span>
+            <ShoppingBasket size={15} />
+            Sales
+          </span>
+          <strong data-testid="sales">{money(m.revenue)}</strong>
+          <small>{s.transactions.length} purchases</small>
+        </div>
+        <div className="kpi">
+          <span>
+            <Activity size={15} />
+            Gross margin
+          </span>
+          <strong>
+            {m.margin.toFixed(1)}
+            <em>%</em>
+          </strong>
+          <small>{money(m.profit)} gross profit</small>
+        </div>
+        <div className="kpi">
+          <span>
+            <Box size={15} />
+            Availability
+          </span>
+          <strong>
+            {m.availability.toFixed(0)}
+            <em>%</em>
+          </strong>
+          <small>{m.units.toLocaleString()} units in stock</small>
+        </div>
+        <div className="kpi">
+          <span>
+            <Leaf size={15} />
+            Food waste
+          </span>
+          <strong>
+            {m.waste}
+            <em> units</em>
+          </strong>
+          <small>{m.wasteRate.toFixed(1)}% of sold + wasted</small>
+        </div>
+        <div className="kpi">
+          <span>
+            <Clock3 size={15} />
+            Queue time
+          </span>
+          <strong>
+            {Math.round(m.wait)}
+            <em>s</em>
+          </strong>
+          <small>{m.queue} shoppers waiting</small>
+        </div>
+        <div className="kpi">
+          <span>
+            <Users size={15} />
+            Satisfaction
+          </span>
+          <strong>
+            {m.satisfaction}
+            <em>%</em>
+          </strong>
+          <small>
+            {
+              s.people.filter(
+                (p) => p.role === "shopper" && p.stage !== "outside",
+              ).length
+            }{" "}
+            shoppers in store
+          </small>
+        </div>
+      </section>
+      <main className="workspace">
+        <section className="shop-stage" aria-label="Paris Flagship shop floor">
+          <div className="scene-caption">
+            <div>
+              <span className="eyebrow">THE SHOP FLOOR</span>
+              <h1>Paris Flagship</h1>
+            </div>
+            <span className="live-badge">
+              <span
+                className={sim.running ? "status-dot" : "status-dot held"}
+              />
+              {sim.running ? "LIVE" : "PAUSED"}
+              <time data-testid="store-clock">{clock(s.time)}</time>
+            </span>
+          </div>
+          <div className="canvas-wrap" data-testid="shop-scene">
+            <Suspense
+              fallback={
+                <div className="scene-loading">Opening your store…</div>
+              }
+            >
+              <StoreScene
+                state={s}
+                store={sim.store}
+                running={sim.runningRef}
+                selected={selected}
+                onSelect={setSelected}
+                cameraReset={cameraReset}
+                active={!panel && !decision}
+              />
+            </Suspense>
+          </div>
+          <div className="scene-footer">
+            <div className="playback-controls">
+              <button
+                className="play-button"
+                onClick={() => sim.setPlaying((v) => !v)}
+                aria-label={
+                  sim.playing ? "Pause simulation" : "Play simulation"
+                }
+                disabled={!!decision || panel === "europe"}
+              >
+                {sim.playing ? (
+                  <Pause size={17} fill="currentColor" />
+                ) : (
+                  <Play size={17} fill="currentColor" />
+                )}
+              </button>
+              <div className="speed-switch" aria-label="Simulation speed">
+                <button
+                  aria-pressed={sim.speed === 1}
+                  onClick={() => sim.setSpeed(1)}
+                >
+                  1×
+                </button>
+                <button
+                  aria-pressed={sim.speed === 2}
+                  onClick={() => sim.setSpeed(2)}
+                >
+                  2×
+                </button>
+              </div>
+              <button
+                className="icon-button"
+                aria-label="Reset camera"
+                onClick={() => setCameraReset((n) => n + 1)}
+              >
+                <Maximize2 size={17} />
+              </button>
+              <button
+                className="icon-button"
+                aria-label="Reset store"
+                onClick={() => setPanel("reset")}
+              >
+                <RotateCcw size={17} />
+              </button>
+            </div>
+            <span className="camera-hint">
+              Drag to explore · scroll to zoom
+            </span>
+          </div>
+          <button className="event-ticker" onClick={() => setPanel("events")}>
+            <span className="ticker-icon">
+              <Radio size={15} />
+            </span>
+            <span>{recent?.message}</span>
+            <ChevronRight size={15} />
+          </button>
+        </section>
+        <aside className="store-sidebar" aria-label="Store operations">
+          {selected ? (
+            <Inspector
+              id={selected}
+              state={s}
+              onClose={() => setSelected(null)}
+            />
+          ) : (
+            <>
+              <div className="section-heading">
+                <span className="eyebrow">YOUR AGENT TEAM</span>
+                <span className="count-pill">
+                  {
+                    s.recommendations.filter((r) => r.status === "pending")
+                      .length
+                  }{" "}
+                  to review
+                </span>
+              </div>
+              <div className="recommendations">
+                {s.recommendations.map((r) => (
+                  <button
+                    key={r.id}
+                    className={`recommendation ${r.status}`}
+                    disabled={r.status !== "pending"}
+                    onClick={() => setDecision(r.id)}
+                  >
+                    <span className="rec-agent">
+                      {r.status === "pending" ? (
+                        <Sparkles size={14} />
+                      ) : (
+                        <Check size={14} />
+                      )}{" "}
+                      {r.agent}
+                    </span>
+                    <strong>{r.title}</strong>
+                    <span className="rec-evidence">{evidence(s, r.id)}</span>
+                    <span className="rec-link">
+                      {r.status === "pending"
+                        ? "Review decision"
+                        : r.status === "applied"
+                          ? actionStatus(s, r.id)
+                          : "Kept current plan"}{" "}
+                      {r.status === "pending" && <ArrowRight size={15} />}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
           )}
+          <section className="department-list">
+            <div className="section-heading">
+              <span className="eyebrow">DEPARTMENTS</span>
+              <span className="tiny-muted">On shelf</span>
+            </div>
+            {DEPARTMENTS.map((d) => {
+              const ps = s.products.filter((p) => p.department === d.id),
+                units = ps.reduce((n, p) => n + stock(s, p.id).shelf, 0);
+              return (
+                <button
+                  key={d.id}
+                  className={
+                    selected === d.id
+                      ? "department-button selected"
+                      : "department-button"
+                  }
+                  onClick={() => setSelected(d.id)}
+                >
+                  <span className="dept-dot" style={{ background: d.color }} />
+                  <span>{d.name}</span>
+                  <strong>{units}</strong>
+                  <ChevronRight size={14} />
+                </button>
+              );
+            })}
+            <div className="utility-inspectors">
+              {["checkouts", "stockroom", "receiving", "pickup"].map((id) => (
+                <button key={id} onClick={() => setSelected(id)}>
+                  {id === "pickup"
+                    ? "Collection"
+                    : id[0].toUpperCase() + id.slice(1)}
+                </button>
+              ))}
+            </div>
+          </section>
+          <footer className="sidebar-footer">
+            <span className="status-dot" /> Solace Agent Mesh{" "}
+            <span>Local demo</span>
+          </footer>
+        </aside>
+      </main>
+      {notice && (
+        <div role="status" className="toast">
+          <Check size={18} />
+          {notice}
         </div>
       )}
-      <footer className="site-footer">
-        <button onClick={() => setDialog("tutorial")}>How to play</button>
-        {state && selectedShop && (
-          <button
-            className="mobile-store-button"
-            onClick={() => setDialog("liveShop")}
-          >
-            <ShoppingBag size={18} /> Shop
-          </button>
-        )}
-        <button onClick={() => setDialog("menu")} aria-haspopup="dialog">
-          Menu <ChevronDown size={18} />
-        </button>
-      </footer>
-      {dialog === "liveShop" && selectedShop && (
-        <Modal
-          title={`ABC Shop · ${selectedShop.city}`}
-          onClose={() => setDialog(null)}
+      {rec && (
+        <Dialog
+          title="A decision for your store"
+          onClose={() => setDecision(null)}
         >
-          <StoreDashboard shop={selectedShop} signals={signals} resources={state?.resources} paused={storePaused} onTogglePlayback={toggleStore} />
-        </Modal>
-      )}
-      {dialog === "menu" && (
-        <Modal title="Menu" onClose={() => setDialog(null)}>
-          {p && (
-            <details
-              className="menu-card-details"
-              aria-label="Current card details"
-            >
-              <summary>Card details</summary>
-              <h3>{p.template.title}</h3>
-              <div className="card-technical">
-                <div className="technical-events">
-                  <span>Events:</span>{" "}
-                  <code>
-                    {[...new Set(p.evidence.map((e) => e.event.topic))].join(
-                      " + ",
-                    )}
-                  </code>
-                </div>
-                <div className="technical-agent">
-                  <span>Agents:</span>{" "}
-                  <p>
-                    <strong>{DEMO_MODELS[p.template.agent]}</strong> proposes to{" "}
-                    {(p.suggested === "approve"
-                      ? p.template.recommendation
-                      : `${p.template.rejectLabel}. Protect what is running low.`
-                    ).replace(/^./, (letter) => letter.toLowerCase())}
-                    {p.updated && (
-                      <span className="updated-dot" title={p.updateReason} />
-                    )}
-                  </p>
-                </div>
-              </div>
-            </details>
-          )}
-          <nav className="game-menu" aria-label="Game menu">
-            {p && (
-              <button onClick={() => setDialog("xray")}>
-                <ScanLine size={22} /> Why this card?
-              </button>
-            )}
-            {state && (
-              <>
-                <button onClick={() => setDialog("shop")}>
-                  <ShoppingBag size={22} /> Your operation
-                </button>
-                <button onClick={() => setDialog("events")}>
-                  <Radio size={22} /> Events
-                </button>
-              </>
-            )}
-            <button onClick={() => setDialog("architecture")}>
-              <Info size={22} /> The mesh
-            </button>
-            <button onClick={() => setDialog("tutorial")}>
-              <Play size={22} /> How to play
-            </button>
-            {state && (
-              <button onClick={() => setDialog("restart")}>
-                <RotateCcw size={22} /> New game
-              </button>
-            )}
-          </nav>
-        </Modal>
-      )}
-      {dialog === "tutorial" && (
-        <Modal title="How to play" onClose={() => setDialog(null)}>
-          <h2>
-            One card.
-            <br />
-            Two choices.
-          </h2>
-          <p>
-            Swipe right to approve. Swipe left to reject.
-            <br />
-            The buttons and arrow keys work too.
-          </p>
-          <ul className="tutorial-list">
-            <li>
-              <Package size={18} />
-              <span>
-                Keep inventory, security, reputation, and cash above zero.
-              </span>
-            </li>
-            <li>
-              <Info size={18} />
-              <span>
-                There is no time limit. Think it through. Days wait for you to
-                continue.
-              </span>
-            </li>
-            <li>
-              <ScanLine size={18} />
-              <span>
-                Menu → “Why this card?” reveals the agents’ disagreement and the
-                events behind it. Reading panels holds the current card.
-              </span>
-            </li>
-            <li>
-              <Zap size={18} />
-              <span>
-                Your choices echo: promotions create rushes, orders arrive
-                later, and stock can spoil.
-              </span>
-            </li>
-          </ul>
-          <p className="fine-print">
-            Six decisions per day. Read both options before choosing. Results
-            stay on screen for 4.5 seconds. Days wait for you to continue. The
-            game generates its events and agent proposals locally; no live AI or
-            broker is connected.
-          </p>
-          <button
-            className="primary-button"
-            onClick={() => {
-              setDialog(null);
-              if (!state) start();
-              else gameRef.current?.focus();
-            }}
-          >
-            Got it <Check size={16} />
-          </button>
-        </Modal>
-      )}
-      {dialog === "xray" && p && (
-        <Modal title="Event X-Ray" wide onClose={() => setDialog(null)}>
-          <span className="eyebrow">
-            SIMULATED EVENTS · ACTUAL ENGINE TRACE
-          </span>
-          <h2>Why this card?</h2>
-          <div className="agent-debate">
-            {[
-              [p.template.agent, p.template.opinion],
-              [p.template.peer, p.template.peerOpinion],
-            ].map(([id, line]) => (
-              <div key={id}>
-                <div
-                  className="debate-avatar"
-                  style={{ background: `${AGENTS[id as AgentId].color}30` }}
-                >
-                  <AgentAvatar id={id as AgentId} />
-                </div>
-                <p>
-                  <strong>{id}</strong>“{line}”
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="xray-events">
-            {p.evidence.map(({ event, fact }, i) => (
-              <div key={`${event.id}-${i}`}>
-                <Check size={15} />
-                <div>
-                  <strong>{fact}</strong>
-                  <code>{event.topic}</code>
-                  <small>
-                    EVENT {event.id} · STORE MINUTE {event.minute}
-                  </small>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="rule-block">
-            <span className="eyebrow">90-MINUTE ROLLING WINDOW</span>
-            <code>{p.rule}</code>
-          </div>
-          <div className="xray-conclusion">
-            <strong>
-              {p.template.agent} + {p.template.peer} → SAM → you
-            </strong>
-            <p>{p.recommendation}</p>
-            {p.updated && (
-              <p className="update-reason">Updated: {p.updateReason}</p>
-            )}
-            <small>
-              {p.confidence}% rule confidence. A deterministic model values
-              scarce resources 3× and abundant resources 0.3×. Model labels are
-              illustrative. No LLM or live broker is connected.
-            </small>
-          </div>
-          <button
-            className="primary-button"
-            onClick={() => {
-              setDialog(null);
-              gameRef.current?.focus();
-            }}
-          >
-            Back to the decision <ArrowRight size={16} />
-          </button>
-        </Modal>
-      )}
-      {dialog === "events" && state && (
-        <Modal title="Event stream" wide onClose={() => setDialog(null)}>
-          <EventStream state={state} onXray={() => setDialog("xray")} />
-        </Modal>
-      )}
-      {dialog === "shop" && state && (
-        <Modal title="Your operation" onClose={() => setDialog(null)}>
-          <h2>Your retail operation.</h2>
-          <img
-            className="operation-art"
-            src={`${import.meta.env.BASE_URL}illustrations/large-store.png`}
-            alt="The supermarket, checkout area, and warehouse loading bays"
-          />
-          <div className="report-grid">
-            {[
-              ["Revenue", money(state.revenue)],
-              ["Profit", money(state.profit)],
-              ["Stock cover", `${state.ops.stockCover} min`],
-              ["Checkout queue", Math.round(state.ops.queue)],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <span>{label}</span>
-                <strong>{value}</strong>
-              </div>
-            ))}
-          </div>
-          <div className="team-members">
-            {(Object.keys(AGENTS) as AgentId[]).map((id) => (
-              <div key={id}>
-                <AgentAvatar id={id} />
-                <strong>{id}</strong>
-                <small>{AGENTS[id].role}</small>
-              </div>
-            ))}
-          </div>
-          <div className="autonomy">
-            <div>
-              <Zap size={15} />
-              <strong>Delegate small tasks</strong>
-              <button
-                className={`toggle ${state.delegated ? "on" : ""}`}
-                onClick={() =>
-                  engine && setState(engine.setDelegation(!state.delegated))
-                }
-                disabled={state.day < 2 || !playing}
-                aria-label="Delegate bounded low-risk actions"
-                aria-pressed={state.delegated}
-              >
-                <span />
-              </button>
+          <div className="decision-content">
+            <span className="agent-label">
+              <Sparkles size={16} /> {rec.agent}
+            </span>
+            <h3>{rec.title}</h3>
+            <p className="decision-evidence">{evidence(s, rec.id)}</p>
+            <div className="decision-explanation">
+              <h4>What happens</h4>
+              <p>{rec.consequence}</p>
+              <h4>The tradeoff</h4>
+              <p>{rec.tradeoff}</p>
             </div>
-            <p>
-              {state.day < 2
-                ? "Unlocks after day 1. Your six strategic decisions remain."
-                : state.day === 2
-                  ? "STOCKY: one top-up/day, max 6 inventory for 3 cash. Only if inventory <35 and cash >28."
-                  : state.day === 3
-                    ? "Stock top-ups + one SHIELD alert/day. Alerts reduce fraud pressure without spending."
-                    : "Stock top-ups + security alerts + one SPARK campaign pause/day when stock is low."}
-            </p>
+            <div className="decision-events">
+              <span className="eyebrow">EVENTS CORRELATED</span>
+              <code>
+                abc/retail/v1/fr/paris-flagship/
+                {rec.id === "restock"
+                  ? "stock/sku-0/updated"
+                  : rec.id === "checkout"
+                    ? "checkout/staffing/updated"
+                    : rec.id === "meal"
+                      ? "batch/bakery/expiry"
+                      : "order/collection/requested"}
+              </code>
+              <span className="fine-print">
+                Local agent rules review the current store state. The shop is
+                paused while you decide.
+              </span>
+            </div>
+            <button
+              className="primary"
+              onClick={() => {
+                if (sim.choose(rec.id, true)) {
+                  setNotice(
+                    rec.id === "meal"
+                      ? "Bakery deal is live. All prices are in sync."
+                      : "Approved. Your colleague is on the way.",
+                  );
+                  setDecision(null);
+                } else
+                  setNotice(
+                    "All colleagues are busy. Try again after a task finishes.",
+                  );
+              }}
+            >
+              {rec.action}
+              <ArrowRight size={17} />
+            </button>
+            <button
+              className="secondary"
+              onClick={() => {
+                sim.choose(rec.id, false);
+                setNotice(
+                  "Current plan kept. Your team will continue as before.",
+                );
+                setDecision(null);
+              }}
+            >
+              {rec.alternative}
+            </button>
           </div>
-          <p className="seed-note">Seed: {state.seed}</p>
-        </Modal>
+        </Dialog>
       )}
-      {dialog === "architecture" && (
-        <Modal title="Behind the mesh" wide onClose={() => setDialog(null)}>
-          <h2>
-            Events have
-            <br />
-            consequences.
-          </h2>
-          <div className="architecture-steps">
-            {[
-              [
-                "01",
-                "Events",
-                "Sales, returns, delays, queues. The store publishes its own signals.",
-              ],
-              [
-                "02",
-                "Patterns",
-                "Recent events and store conditions select matching cards. 60 situations, shuffled within the best matches.",
-              ],
-              [
-                "03",
-                "Agents",
-                "Specialists weigh competing priorities. SAM presents a deterministic recommendation.",
-              ],
-              [
-                "04",
-                "You",
-                "Approve or reject. Your action creates new events — and tomorrow’s problems.",
-              ],
-            ].map(([n, t, d]) => (
-              <div key={n}>
-                <span>{n}</span>
-                <p>
-                  <strong>{t}</strong>
-                  {d}
-                </p>
-              </div>
+      {panel === "events" && (
+        <Dialog title="The event stream" wide onClose={() => setPanel(null)}>
+          <div className="event-toolbar">
+            <span className="stream-status">
+              <span
+                className={sim.running ? "status-dot" : "status-dot held"}
+              />
+              {sim.running ? "Streaming" : "Paused"} · {s.events.length} / 600
+              events
+            </span>
+            <button
+              className="secondary compact"
+              onClick={() => sim.setPlaying((v) => !v)}
+            >
+              {sim.playing ? <Pause size={15} /> : <Play size={15} />}{" "}
+              {sim.playing ? "Pause" : "Play"}
+            </button>
+          </div>
+          <div className="filter-row" role="group" aria-label="Filter events">
+            {(
+              ["all", ...Object.keys(categoryLabels)] as (Category | "all")[]
+            ).map((c) => (
+              <button
+                key={c}
+                aria-pressed={category === c}
+                onClick={() => setCategory(c)}
+              >
+                {c === "all" ? "All events" : categoryLabels[c]}
+              </button>
             ))}
           </div>
-          <p className="simulation-note">
-            This browser demo uses simulated agents and a local event bus. The
-            backend adapter prepares the same event contract for PubSub+ and
-            Solace Agent Mesh. Real connectivity needs a configured backend;
-            credentials stay server-side.
-          </p>
-          <div className="architecture-links">
-            <a href="https://solace.com" target="_blank" rel="noreferrer">
-              Solace <ArrowUpRight size={12} />
-            </a>
-            <a
-              href="https://solacelabs.github.io/solace-agent-mesh/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Agent Mesh <ArrowUpRight size={12} />
-            </a>
-            <a
-              href="https://github.com/solacese/sam-retail/tree/main/docs"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Integration docs <ArrowUpRight size={12} />
-            </a>
+          <div className="event-history" data-testid="event-history">
+            {s.events
+              .filter((e) => category === "all" || e.category === category)
+              .map((e) => (
+                <article className={`stream-event ${e.category}`} key={e.id}>
+                  <time>{clock(e.at)}</time>
+                  <div>
+                    <span className="event-category">
+                      {categoryLabels[e.category]}
+                    </span>
+                    <p>{e.message}</p>
+                    <code>{e.topic}</code>
+                  </div>
+                </article>
+              ))}
+            {!s.events.some(
+              (e) => category === "all" || e.category === category,
+            ) && (
+              <p className="empty-state">
+                No {category} events yet. Activity appears here as the shop
+                runs.
+              </p>
+            )}
           </div>
-        </Modal>
+          <p className="event-footnote">
+            Events come from this store’s local simulation. No live broker or
+            model is connected.
+          </p>
+        </Dialog>
       )}
-      {dialog === "restart" && (
-        <Modal title="New shift" onClose={() => setDialog(null)}>
-          <h2>Start fresh?</h2>
-          <p>Your current shift will end.</p>
-          <button className="primary-button" onClick={() => start()}>
-            Restart this seed <RotateCcw size={16} />
-          </button>
-          <button className="text-button" onClick={home}>
-            Back to Europe
-          </button>
-        </Modal>
+      {panel === "europe" && (
+        <Dialog title="Across Europe" wide onClose={() => setPanel(null)}>
+          <EuropeNetwork
+            onReturn={() => {
+              setPanel(null);
+              setCameraReset((n) => n + 1);
+            }}
+          />
+        </Dialog>
+      )}
+      {panel === "help" && (
+        <Dialog title="Welcome to ABC Shop" onClose={() => setPanel(null)}>
+          <div className="help-content">
+            <p>
+              Explore a working supermarket, help its agents, and watch your
+              decisions reach the shop floor.
+            </p>
+            <ul>
+              <li>
+                Drag the shop to move around. Scroll or pinch to zoom. Use two
+                fingers or right-drag to rotate.
+              </li>
+              <li>
+                Select a department or fixture to inspect its stock, prices, and
+                status. The department list offers the same controls.
+              </li>
+              <li>
+                Review a recommendation to compare its benefits and tradeoffs.
+                There is no decision timer.
+              </li>
+              <li>
+                Pause, change speed, or open Events to explore the same activity
+                in the stream.
+              </li>
+            </ul>
+            <p>
+              This is a deterministic local demonstration of Solace event-driven
+              coordination. Stores and benefits are illustrative; no live Solace
+              broker or AI model is connected.
+            </p>
+            <button className="primary" onClick={() => setPanel(null)}>
+              Back to the shop <ArrowRight size={17} />
+            </button>
+          </div>
+        </Dialog>
+      )}
+      {panel === "reset" && (
+        <Dialog title="Start a fresh store?" onClose={() => setPanel(null)}>
+          <div className="help-content">
+            <p>
+              This resets stock, sales, staff tasks, and decisions to the same
+              starting conditions.
+            </p>
+            <button
+              className="primary"
+              onClick={() => {
+                sim.reset();
+                setSelected(null);
+                setPanel(null);
+                setCameraReset((n) => n + 1);
+                setNotice("A fresh day at Paris Flagship.");
+              }}
+            >
+              Reset store <RotateCcw size={17} />
+            </button>
+            <button className="secondary" onClick={() => setPanel(null)}>
+              Keep this store
+            </button>
+          </div>
+        </Dialog>
       )}
     </div>
   );

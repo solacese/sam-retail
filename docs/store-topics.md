@@ -1,25 +1,26 @@
 # Shop event topics
 
-The local demo follows Solace's Domain / Noun / Verb / Properties structure:
+Local events use a hierarchical Solace-style topic:
 
-`abc/retail/{object}/{action}/v1/{country}/{shop}/{entity}`
+```
+abc/retail/v1/fr/paris-flagship/<domain>/<entity>/<action>
+```
 
-Country codes are lowercase ISO codes, shop IDs match the catalogue, and entities are product, order, sensor, or robot IDs. Quantities, prices, temperatures, and outcomes stay in event details rather than topic levels.
+Examples emitted by the simulation:
 
-Examples for Paris Market:
+```
+abc/retail/v1/fr/paris-flagship/stock/sku-0/updated
+abc/retail/v1/fr/paris-flagship/stock/sku-0/replenished
+abc/retail/v1/fr/paris-flagship/price/sku-4/updated
+abc/retail/v1/fr/paris-flagship/purchase/till/completed
+abc/retail/v1/fr/paris-flagship/purchase/online/completed
+abc/retail/v1/fr/paris-flagship/fridge/fresh/temperature
+abc/retail/v1/fr/paris-flagship/camera/entrance/occupancy
+abc/retail/v1/fr/paris-flagship/checkout/3/opened
+abc/retail/v1/fr/paris-flagship/order/collection/ready
+abc/retail/v1/fr/paris-flagship/agent/restock/approved
+```
 
-- `abc/retail/inventory/updated/v1/fr/fr-0/milk`
-- `abc/retail/price/updated/v1/fr/fr-0/milk`
-- `abc/retail/purchase/completed/v1/fr/fr-0/order-12`
-- `abc/retail/fridge/temperatureUpdated/v1/fr/fr-0/fridge-1`
-- `abc/retail/camera/statusUpdated/v1/fr/fr-0/entrance-1`
-- `abc/retail/robot/taskAssigned/v1/fr/fr-0/stocky`
-- `abc/retail/decision/applied/v1/fr/fr-0/{decisionId}`
+Future Solace subscriptions could use `abc/retail/v1/fr/paris-flagship/stock/>`, `abc/retail/v1/fr/paris-flagship/price/*/updated` or `abc/retail/v1/*/*/fridge/>`. In this demo the drawer filters by the event category; no subscriptions are installed on an external broker.
 
-The friendly category buttons use topic subscriptions: Pricing matches `abc/retail/price/*/v1/fr/fr-0/>`; IoT subscribes to both fridge and camera; All matches `abc/retail/*/*/v1/fr/fr-0/>`. The local matcher supports whole-level `*` and terminal `>` with one-or-more trailing levels. It is a demo matcher, not a complete Solace client implementation.
-
-The illustration shows twelve human shoppers and no robot agents. Shoppers follow outside → entrance → shelves → checkout queue → payment → outside routes driven by the purchase stream, with pickup and payment gestures after arrival. Pause / Play stops event generation and shopper motion, retaining the current positions and interaction progress until resuming. The control is shared across shop views and does not pause the card game. Manager outcomes produced while paused join the feed on resume. History retains the most recent 600 timestamped events, all filterable and scrollable. Reduced motion keeps shoppers still, preserves pickup/payment poses, and removes flying parcels.
-
-The static Pages demo creates events in the browser and bridges game decisions into the shop feed. It does not connect to an external broker. Core correlation rules keep their existing canonical topics.
-
-Reference: [Solace EDA basics: topic architecture and subscriptions](https://docs.solace.com/Get-Started/tutorial/event-broker-basics.htm).
+Events have an increasing local `id`, simulation timestamp `at`, `category`, `topic`, readable `message`, and optional fixture `target`. The latest 600 are retained, newest first. Stock, purchase, pricing and device events describe the same state used by the scene and inspectors.

@@ -15,13 +15,13 @@ export const PERKS: Record<
   meal: {
     title: "Meal deals",
     benefit: "Happier shoppers",
-    description: "Lunch bundles give reputation a head start.",
+    description: "Agents combine stock and demand events to suggest useful lunch bundles.",
   },
   inventory: {
     title: "Smarter stock",
-    benefit: "+5% revenue · less waste",
+    benefit: "Fewer empty shelves, less waste",
     description:
-      "Better stock planning boosts sales and halves food waste in the game.",
+      "Agents coordinate stock counts, replenishment, and expiry-aware picking.",
   },
   pricing: {
     title: "Prices in sync",
@@ -34,9 +34,9 @@ export const PERKS: Record<
     description: "Fridges and cameras keep the agents informed.",
   },
   pickup: {
-    title: "Robot teamwork",
+    title: "Order coordination",
     benefit: "Faster pickup",
-    description: "Picking bots and staff share the same order updates.",
+    description: "Picking teams and collection points share the same order updates.",
   },
   loyalty: {
     title: "Regular rewards",

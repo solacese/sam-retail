@@ -1,508 +1,235 @@
-import { test, expect } from "@playwright/test";
-async function freezeClock(page: import("@playwright/test").Page) {
-  // Browser and host clocks can differ slightly, so use an explicit start
-  // and pause one minute later before loading the app.
-  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
-  await page.clock.pauseAt(new Date("2026-01-01T00:01:00Z"));
+import { test, expect, type Page } from "@playwright/test";
+async function openStore(page: Page) {
+  await page.goto("./");
+  await expect(
+    page.getByRole("heading", { name: "Paris Flagship" }),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator("canvas")
+      .or(page.getByRole("heading", { name: "Your store, at a glance" })),
+  ).toBeVisible();
 }
-async function openGame(page: import("@playwright/test").Page) {
-  await page.goto("?seed=BROWSER-TEST");
+async function pause(page: Page) {
   await page
-    .getByRole("button", { name: "Choose France", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Help the agents for a week", exact: true })
+    .getByRole("button", { name: "Pause simulation", exact: true })
     .click();
 }
-test("mobile and desktop launch a single-card game without overflow", async ({
+async function review(page: Page, title: string) {
+  await page
+    .getByRole("button")
+    .filter({ has: page.getByText(title, { exact: true }) })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "A decision for your store" }),
+  ).toBeVisible();
+}
+async function approve(page: Page, title: string, action: string) {
+  await review(page, title);
+  await page.getByRole("button", { name: action, exact: true }).click();
+}
+test("opens directly into a responsive shop without runtime errors", async ({
   page,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await openGame(page);
-  await expect(page.getByRole("meter")).toHaveCount(4);
-  await expect(page.getByRole("button", { name: /^Approve:/ })).toBeVisible();
-  const sizes = await page.evaluate(() => ({
-    width: innerWidth,
-    scroll: document.documentElement.scrollWidth,
-    bottom: document.querySelector(".choice.approve")!.getBoundingClientRect()
-      .bottom,
-    height: innerHeight,
-  }));
-  expect(sizes.scroll).toBeLessThanOrEqual(sizes.width);
-  expect(sizes.bottom).toBeLessThan(sizes.height);
+  await openStore(page);
+  await expect(
+    page.getByRole("region", { name: "Live store performance" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Europe", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".department-button").filter({ hasText: "Fruit & veg" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.waitForTimeout(600);
   expect(errors).toEqual([]);
 });
-test("Menu and Event X-Ray preserve the current untimed decision", async ({
+test("manual pause, decision pause and resume preserve playback state", async ({
   page,
 }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await freezeClock(page);
-  await openGame(page);
-  const title = await page.locator(".decision-card h2").innerText();
-  await page.getByRole("button", { name: "Menu", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Why this card?", exact: true })
-    .click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(page.locator(".rule-block code")).toContainText("AND");
-  await expect(page.locator(".xray-events code").first()).toBeVisible();
-  await page.clock.fastForward(300000);
-  await page.getByRole("button", { name: "Back to the decision" }).click();
-  await page.getByRole("button", { name: "Menu", exact: true }).click();
-  await page.clock.fastForward(300000);
-  await expect(
-    page.getByRole("dialog", { name: "Menu", exact: true }),
-  ).toBeVisible();
+  await openStore(page);
+  await pause(page);
+  const initial = await page.getByTestId("store-clock").innerText();
+  await page.waitForTimeout(1100);
+  await expect(page.getByTestId("store-clock")).toHaveText(initial);
+  await review(page, "Keep the apple shelf full");
+  await page.waitForTimeout(1100);
+  await expect(page.getByTestId("store-clock")).toHaveText(initial);
   await page.getByRole("button", { name: "Close dialog" }).click();
-  await expect(page.getByRole("button", { name: "Pause game" })).toHaveCount(0);
-  await expect(page.locator(".decision-card h2")).toHaveText(title);
-});
-test("decisions have no time limit or automatic rejection", async ({
-  page,
-}) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await freezeClock(page);
-  await openGame(page);
-  const title = await page.locator(".decision-card h2").innerText();
-  await page.clock.fastForward(300000);
-  await expect(page.locator(".decision-card h2")).toHaveText(title);
-  await expect(page.locator(".day-line, .turn-dots, .countdown")).toHaveCount(
-    0,
-  );
-  await expect(page.getByRole("button", { name: /^Approve:/ })).toBeEnabled();
-  await expect(page.locator(".card-timer")).toHaveCount(0);
-});
-test("keyboard decisions work without a pause overlay", async ({
-  page,
-}) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await freezeClock(page);
-  await openGame(page);
-  await page.locator(".game-main").focus();
-  await page.keyboard.press("Space");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Approve:/ })).toBeEnabled();
-  await page.keyboard.press("ArrowRight");
-  await expect(page.getByText("APPROVED", { exact: true })).toBeVisible();
-  await page.clock.runFor(4700);
-  await page.keyboard.press("ArrowLeft");
-  await expect(page.getByText("REJECTED", { exact: true })).toBeVisible();
-});
-test("six decisions reach the daily report and autonomy unlock", async ({
-  page,
-}) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await freezeClock(page);
-  await openGame(page);
-  for (let i = 0; i < 6; i++) {
-    await page.getByRole("button", { name: /^Approve:/ }).click();
-    await page.clock.runFor(4700);
-  }
-  await expect(page.getByText("DAY 1 COMPLETE", { exact: true })).toBeVisible();
   await expect(
-    page.getByText("Stock monitoring unlocked", { exact: false }),
+    page.getByRole("button", { name: "Play simulation", exact: true }),
   ).toBeVisible();
-  await page.clock.fastForward(60000);
-  await expect(page.getByText("DAY 1 COMPLETE", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Open day 2" }).click();
-  await expect(page.locator(".decision-card")).toBeVisible();
-  await page.getByRole("button", { name: "Menu", exact: true }).click();
   await page
-    .getByRole("button", { name: "Your operation", exact: true })
+    .getByRole("button", { name: "Play simulation", exact: true })
     .click();
-  await expect(
-    page.getByRole("button", { name: "Delegate bounded low-risk actions" }),
-  ).toBeEnabled();
+  await review(page, "Keep the apple shelf full");
+  const frozen = await page.getByTestId("store-clock").innerText();
+  await page.waitForTimeout(1100);
+  await expect(page.getByTestId("store-clock")).toHaveText(frozen);
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("store-clock")).not.toHaveText(frozen, {
+    timeout: 5000,
+  });
 });
-test("event stream and shop are optional panels", async ({ page }) => {
-  await openGame(page);
-  await expect(page.locator(".event-panel")).toHaveCount(0);
-  await page.getByRole("button", { name: "Menu", exact: true }).click();
-  await page.getByRole("button", { name: "Events", exact: true }).click();
-  await expect(page.locator(".event-row")).not.toHaveCount(0);
-  await expect(
-    page.getByText("decision/proposed", { exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Close dialog" }).click();
-  await page.getByRole("button", { name: "Menu", exact: true }).click();
+test("deal updates visible shelf prices and emits filtered pricing history", async ({
+  page,
+}) => {
+  await openStore(page);
+  await pause(page);
   await page
-    .getByRole("button", { name: "Your operation", exact: true })
+    .getByRole("button", { name: /Bakery/ })
+    .filter({ has: page.locator(".dept-dot") })
     .click();
-  await expect(
-    page.getByRole("heading", { name: "Your retail operation." }),
-  ).toBeVisible();
-  await expect(page.getByText("Seed: BROWSER-TEST")).toBeVisible();
-});
-for (const [direction, result] of [
-  [1, "APPROVED"],
-  [-1, "REJECTED"],
-] as const) {
-  test(`pointer swipe tilts and arcs the card before ${result.toLowerCase()}`, async ({
+  await expect(page.getByText(/€3.49/)).toBeVisible();
+  await page.getByRole("button", { name: "Close inspector" }).click();
+  await approve(
     page,
-  }) => {
-    await page.emulateMedia({ reducedMotion: "no-preference" });
-    await openGame(page);
-    const card = page.locator(".decision-card");
-    await expect(card).toHaveCSS("opacity", "1");
-    const b = await card.boundingBox();
-    if (!b) throw Error("Missing card");
-    await page.mouse.move(b.x + b.width / 2, b.y + 80);
-    await page.mouse.down();
-    await page.mouse.move(b.x + b.width / 2 + direction * 120, b.y + 85, {
-      steps: 12,
-    });
-    await expect
-      .poll(() =>
-        card.evaluate((el, expectedDirection) => {
-          const matrix = new DOMMatrix(getComputedStyle(el).transform);
-          return (
-            Math.sign(matrix.b) === expectedDirection &&
-            Math.abs(matrix.b) > 0.05 &&
-            matrix.f < -1
-          );
-        }, direction),
-      )
-      .toBe(true);
-    // Observe each frame before releasing: a remote CI browser can miss a
-    // half-second exit between separate polling round trips.
-    const exitCurve = page.evaluate(
-      (expectedDirection) =>
-        new Promise<boolean>((resolve) => {
-          const started = performance.now();
-          const observe = () => {
-            const card = document.querySelector(".decision-card");
-            if (card) {
-              const matrix = new DOMMatrix(getComputedStyle(card).transform);
-              if (
-                Math.sign(matrix.e) === expectedDirection &&
-                Math.abs(matrix.e) > 120 &&
-                matrix.f < -5
-              ) {
-                resolve(true);
-                return;
-              }
-            }
-            if (!card || performance.now() - started > 2000) resolve(false);
-            else requestAnimationFrame(observe);
-          };
-          requestAnimationFrame(observe);
-        }),
-      direction,
-    );
-    await page.mouse.up();
-    expect(await exitCurve).toBe(true);
-    await expect(page.getByText(result, { exact: true })).toBeVisible();
-  });
-}
-
-test("results remain readable for 4.5 seconds", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await freezeClock(page);
-  await openGame(page);
-  await page.getByRole("button", { name: /^Approve:/ }).click();
-  await expect(page.getByText("APPROVED", { exact: true })).toBeVisible();
-  await page.clock.runFor(4000);
-  await expect(page.getByText("APPROVED", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Approve:/ })).toBeDisabled();
-  await page.clock.runFor(700);
-  await expect(page.getByText("APPROVED", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Approve:/ })).toBeEnabled();
-});
-
-test("small viewport and reduced-motion preferences remain playable", async ({
-  page,
-}) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.setViewportSize({ width: 320, height: 640 });
-  await openGame(page);
-  await expect(page.getByRole("button", { name: /^Approve:/ })).toBeVisible();
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth),
-  ).toBeLessThanOrEqual(320);
-  await page.getByRole("button", { name: /^Reject:/ }).click();
-  await expect(page.getByText("REJECTED", { exact: true })).toBeVisible();
-});
-
-test("compact Events and Agents are visible, with full details in the menu", async ({
-  page,
-}) => {
-  await openGame(page);
-  const choices = page.locator(".choice");
-  await expect(choices.locator(".option-effects")).toHaveCount(0);
-  await expect(choices.locator("strong")).toHaveCount(2);
-  await expect(page.locator(".resource>small")).toHaveCount(0);
-  await expect(page.locator(".decision-card .card-technical")).toHaveCount(0);
-  await expect(page.locator(".card-context strong")).toHaveText([
-    "Events",
-    "Agents",
-  ]);
-  await expect(page.locator(".card-context")).toBeVisible();
-  await page.getByRole("button", { name: "Menu", exact: true }).click();
-  await page.getByText("Card details", { exact: true }).click();
-  await expect(page.locator(".technical-events code")).toContainText("/");
-  await expect(page.locator(".technical-agent strong")).toHaveText(
-    /GPT|Claude|Gemini/,
+    "Sell fresh food before it expires",
+    "Launch a 20% bakery deal",
   );
-  await expect(page.locator(".card-technical")).not.toContainText("simulated");
-  await expect(page.locator(".technical-agent")).toContainText("proposes to");
-  await expect(page.locator(".card-technical > div").first()).toHaveClass(
-    "technical-events",
-  );
-});
-
-test("phone browser height changes keep readable text and both choices on screen", async ({
-  page,
-}) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await openGame(page);
-  for (const [width, height] of [
-    [393, 667],
-    [393, 780],
-    [320, 568],
-    [430, 740],
-  ]) {
-    await page.setViewportSize({ width, height });
-    await page.evaluate(() => document.fonts.ready);
-    const layout = await page.evaluate(() => {
-      const choice = document.querySelector(".choice.approve")!;
-      const copy = document.querySelector(".decision-card .card-copy > p")!;
-      const footer = document.querySelector(".site-footer")!;
-      const context = document.querySelector(".card-context")!;
-      return {
-        width: innerWidth,
-        height: innerHeight,
-        scrollWidth: document.documentElement.scrollWidth,
-        scrollHeight: document.documentElement.scrollHeight,
-        choiceBottom: choice.getBoundingClientRect().bottom,
-        choiceTop: choice.getBoundingClientRect().top,
-        contextBottom: context.getBoundingClientRect().bottom,
-        choiceHeight: choice.getBoundingClientRect().height,
-        footerBottom: footer.getBoundingClientRect().bottom,
-        copySize: parseFloat(getComputedStyle(copy).fontSize),
-        choiceSize: parseFloat(
-          getComputedStyle(choice.querySelector("strong")!).fontSize,
-        ),
-      };
-    });
-    expect(layout.scrollWidth).toBeLessThanOrEqual(width);
-    expect(layout.scrollHeight).toBeLessThanOrEqual(height);
-    expect(layout.choiceBottom).toBeLessThan(height);
-    expect(layout.contextBottom).toBeLessThan(layout.choiceTop);
-    expect(layout.footerBottom).toBeLessThanOrEqual(height);
-    expect(layout.choiceHeight).toBeGreaterThanOrEqual(44);
-    expect(layout.copySize).toBeGreaterThanOrEqual(16);
-    expect(layout.choiceSize).toBeGreaterThanOrEqual(16);
-  }
-  await expect(page.getByRole("button", { name: "Pause game" })).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Menu", exact: true }),
-  ).toBeVisible();
-});
-
-test("Europe leads to a country, shop perks, and an untimed week", async ({
-  page,
-}) => {
-  await page.goto("?seed=ATLAS-TEST");
-  await expect(
-    page.getByRole("group", { name: "Choose a country on the Europe map" }),
-  ).toBeVisible();
-  await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
-  await expect(
-    page.getByRole("heading", { name: "France", exact: true }),
-  ).toBeVisible();
   await page
-    .getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true })
+    .getByRole("button", { name: /Bakery/ })
+    .filter({ has: page.locator(".dept-dot") })
     .click();
-  await expect(
-    page.getByRole("heading", { name: "Meal deals", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("+5% revenue · less waste", { exact: true }),
-  ).toBeVisible();
-  await expect(page.locator(".shop-perk")).toHaveCount(3);
-  await page
-    .getByRole("button", { name: "Help the agents for a week", exact: true })
-    .click();
-  await expect(page.locator(".decision-card")).toBeVisible();
-  await expect(page.locator(".day-line, .countdown")).toHaveCount(0);
-});
-
-test("fast store events filter by pricing and IoT, and can be paused to read", async ({
-  page,
-}) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("?seed=FEED-TEST");
-  await freezeClock(page);
-  await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
-  await page
-    .getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true })
-    .click();
-  await page.clock.runFor(4200);
+  await expect(page.getByText(/€2.79 · deal/)).toBeVisible();
+  await page.getByRole("button", { name: "Events", exact: true }).click();
   await page.getByRole("button", { name: "Pricing", exact: true }).click();
-  await expect(page.locator(".shop-event-row").first()).toHaveAttribute(
-    "data-kind",
-    "pricing",
+  await expect(page.locator(".stream-event")).toHaveCount(4);
+  await expect(page.locator(".stream-event").first()).toContainText(
+    "on shelf, till & online",
   );
-  expect(
-    await page
-      .locator(".shop-event-row")
-      .evaluateAll((rows) =>
-        rows.every((row) => row.getAttribute("data-kind") === "pricing"),
-      ),
-  ).toBe(true);
-  await expect(page.locator(".shop-event-feed")).toContainText(
-    "shelf, till, and online updated together",
+  await expect(page.locator(".event-history code").first()).toContainText(
+    "abc/retail/v1/fr/paris-flagship/price/",
   );
-  await page.getByRole("button", { name: "IoT", exact: true }).click();
-  await expect(page.locator(".shop-event-feed")).toContainText(
-    "Fridge temperature checked",
-  );
-  await expect(page.locator(".shop-event-feed")).toContainText(
-    "Safety camera checked",
-  );
-  await page.getByRole("button", { name: "Pause shop activity", exact: true }).click();
-  const held = await page.locator(".shop-event-feed").innerText();
-  await page.clock.runFor(8400);
-  expect(await page.locator(".shop-event-feed").innerText()).toBe(held);
-  await page.getByRole("button", { name: "Play shop activity", exact: true }).click();
+  await page.getByRole("button", { name: "Close dialog" }).click();
   await expect(
-    page.getByRole("button", { name: "Pause shop activity", exact: true }),
+    page.getByRole("button", { name: "Play simulation", exact: true }),
   ).toBeVisible();
 });
-
-test("the shop stays beside desktop cards and opens from the mobile footer", async ({
+test("Europe pauses flagship and offers one example store card", async ({
+  page,
+}) => {
+  await openStore(page);
+  await page.getByRole("button", { name: "Europe", exact: true }).click();
+  const clock = await page.getByTestId("store-clock").innerText();
+  await expect(
+    page.locator(".country-label").getByText("France", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Choose France", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "ABC Shop · Paris Market", exact: true })
+    .click();
+  await expect(page.getByText("EXAMPLE STORE PROFILE")).toBeVisible();
+  await expect(page.getByText("How Solace Agent Mesh helps")).toBeVisible();
+  await expect(page.locator(".network-benefit")).toHaveCount(3);
+  await expect(page.getByTestId("store-clock")).toHaveText(clock);
+  await page.getByRole("button", { name: "Enter Paris Flagship" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByTestId("store-clock")).not.toHaveText(clock, {
+    timeout: 5000,
+  });
+});
+test("inspectors, speed and reset remain accessible on touch layouts", async ({
+  page,
+}) => {
+  await openStore(page);
+  await pause(page);
+  await page.getByRole("button", { name: "2×", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "2×", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Checkouts", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Checkouts", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Checkout 3", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Reset camera", exact: true }).click();
+  await page.getByRole("button", { name: "Reset store", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Reset store", exact: true })
+    .last()
+    .click();
+  await expect(page.getByTestId("store-clock")).toHaveText("09:00:00");
+  await expect(page.getByTestId("sales")).toHaveText("€0.00");
+  await expect(page.locator(".recommendation.pending")).toHaveCount(4);
+});
+test("event drawer supports pause, category filters and history", async ({
+  page,
+}) => {
+  await openStore(page);
+  await page.getByRole("button", { name: "Events", exact: true }).click();
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Play", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Inventory", exact: true }).click();
+  await expect(page.locator(".stream-event").first()).toContainText(
+    "Inventory",
+  );
+  expect(await page.locator(".stream-event").count()).toBeGreaterThan(10);
+  const n = await page.locator(".stream-event").count();
+  await page.waitForTimeout(600);
+  await expect(page.locator(".stream-event")).toHaveCount(n);
+  await page.getByRole("button", { name: "All events", exact: true }).click();
+  await expect(page.locator(".stream-event").first()).toBeVisible();
+});
+test("reduced motion preserves useful operations and untimed decisions", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await openGame(page);
-  if (test.info().project.name === "desktop") {
-    await expect(page.locator(".desktop-store .isometric-shop")).toBeVisible();
-    await expect(page.locator(".desktop-store .shop-event-feed")).toBeVisible();
-  } else {
-    await page.getByRole("button", { name: "Shop", exact: true }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.locator(".modal .isometric-shop")).toBeVisible();
-    await page
-      .getByRole("button", { name: "Close dialog", exact: true })
-      .click();
-    await expect(page.getByRole("button", { name: /^Approve:/ })).toBeEnabled();
-  }
+  await openStore(page);
+  await review(page, "Get the collection order ready");
+  await expect(page.getByText("What happens", { exact: true })).toBeVisible();
+  await expect(page.getByText("The tradeoff", { exact: true })).toBeVisible();
+  const t = await page.getByTestId("store-clock").innerText();
+  await page.waitForTimeout(1500);
+  await expect(page.getByTestId("store-clock")).toHaveText(t);
+  await page
+    .getByRole("button", { name: "Keep the colleague available", exact: true })
+    .click();
+  await expect(page.locator(".recommendation.declined")).toHaveCount(1);
 });
-
-test("country names are drawn on the map and shop art loads", async ({ page }) => {
-  await page.goto("?seed=ART-TEST");
-  await expect(page.locator(".country-label")).toHaveCount(41);
-  await expect(page.locator(".country-label").filter({ hasText: /^France$/ })).toBeVisible();
-  await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
-  await page.getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true }).click();
-  const artwork = page.locator(".shop-artwork");
-  const href = await artwork.getAttribute("href");
-  expect(href).toMatch(/\/shops\/[a-z-]+\.webp$/);
-  const response = await page.request.get(href!);
-  expect(response.ok()).toBe(true);
-  expect(response.headers()["content-type"]).toContain("image/webp");
-});
-
-test("pause and play stop the feed and shoppers together", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-  await freezeClock(page);
-  await page.goto("?seed=PLAYBACK-TEST");
-  await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
-  await page.getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true }).click();
-  await page.clock.runFor(4300);
-  await page.getByRole("button", { name: "Pause shop activity", exact: true }).click();
-  await page.clock.runFor(32);
-  const history = await page.locator(".shop-event-feed").innerText();
-  const positions = await page.locator('[data-shopper]').evaluateAll(people => people.map(p => getComputedStyle(p).transform));
-  await page.clock.runFor(8400);
-  expect(await page.locator(".shop-event-feed").innerText()).toBe(history);
-  expect(await page.locator('[data-shopper]').evaluateAll(people => people.map(p => getComputedStyle(p).transform))).toEqual(positions);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.getByRole("button", { name: "Play shop activity", exact: true }).click();
-  await page.clock.runFor(4200);
-  expect(await page.locator(".shop-event-feed").innerText()).not.toBe(history);
-  expect(await page.locator('[data-shopper]').evaluateAll(people => people.map(p => getComputedStyle(p).transform))).not.toEqual(positions);
-});
-
-test("reduced motion keeps shoppers still while scoped events continue", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await freezeClock(page);
-  await page.goto("?seed=QUIET-SHOPPERS");
-  await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
-  await page.getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true }).click();
-  const destinations = await page.locator("[data-shopper]").evaluateAll(robots => robots.map(r => r.getAttribute("data-destination")));
-  await page.clock.runFor(6000);
-  expect(await page.locator("[data-shopper]").evaluateAll(robots => robots.map(r => r.getAttribute("data-destination")))).toEqual(destinations);
-  await page.getByRole("button", { name: "Pricing", exact: true }).click();
-  await expect(page.locator(".shop-event-row code").first()).toHaveText(/^abc\/retail\/price\/updated\/v1\/fr\/fr-0\/[a-z-]+$/);
-});
-
-test("returning from another tab preserves play without a breather screen", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await freezeClock(page);
-  await openGame(page);
-  const title = await page.locator(".decision-card h2").innerText();
-  await page.evaluate(() => {
-    Object.defineProperty(document, "hidden", { configurable: true, value: true });
-    document.dispatchEvent(new Event("visibilitychange"));
-    Object.defineProperty(document, "hidden", { configurable: true, value: false });
-    document.dispatchEvent(new Event("visibilitychange"));
+test("without WebGL, operational view and decisions still work", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (
+      type: string,
+      ...args: unknown[]
+    ) {
+      if (type === "webgl2" || type === "webgl") return null;
+      return original.call(this, type as "2d", ...(args as []));
+    } as typeof original;
   });
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByText("Take a breather.", { exact: true })).toHaveCount(0);
-  await expect(page.locator(".decision-card h2")).toHaveText(title);
-  await expect(page.getByRole("button", { name: /^Approve:/ })).toBeEnabled();
-});
-
-test("store health follows the selected shop and its decisions", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await freezeClock(page);
-  await page.goto("?seed=STORE-STATS");
-  await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
-  await page.getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true }).click();
-  const inventory = page.locator('[data-stat="inventory"] i');
-  const paris = await inventory.getAttribute("style");
-  await page.getByRole("button", { name: "France shops", exact: true }).click();
-  await page.getByRole("button", { name: "Visit ABC Shop Lyon Riverside", exact: true }).click();
-  expect(await inventory.getAttribute("style")).not.toBe(paris);
-  await expect(page.getByRole("group", { name: "Lyon Riverside statistics" })).toBeVisible();
-  await page.getByRole("button", { name: "Help the agents for a week", exact: true }).click();
-  await page.getByRole("button", { name: /^Approve:/ }).click();
-  const actual = await page.getByRole("meter", { name: "Inventory", exact: true }).getAttribute("aria-valuenow");
-  if (test.info().project.name !== "desktop") await page.getByRole("button", { name: "Shop", exact: true }).click();
-  const widths = await page.locator('.store-statistic[data-stat="inventory"] i').evaluateAll(bars => bars.map(bar => (bar as HTMLElement).style.width));
-  expect(widths.every(width => width === `${actual}%`)).toBe(true);
-});
-
-test("more human shoppers enter, pick, pay, and leave without robot sprites", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("?seed=SHOPPERS");
-  await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
-  await page.getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true }).click();
-  await expect(page.locator('[data-shopper]')).toHaveCount(12);
-  await expect(page.locator('.shopper-item')).not.toHaveCount(0);
-  await expect(page.locator('.shopper-payment')).not.toHaveCount(0);
-  await expect(page.locator('[data-robot]')).toHaveCount(0);
-  await expect(page.locator('[data-activity="entering"]')).not.toHaveCount(0);
-  await expect(page.locator('[data-activity="leaving"]')).not.toHaveCount(0);
-});
-
-test("event history retains older timestamps and remains filterable", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await freezeClock(page);
-  await page.goto("?seed=LONG-HISTORY");
-  await page.getByLabel("Choose a country", { exact: true }).selectOption("FR");
-  await page.getByRole("button", { name: "Visit ABC Shop Paris Market", exact: true }).click();
-  await page.clock.runFor(42000);
-  await page.getByRole("button", { name: "Pause shop activity", exact: true }).click();
-  expect(await page.locator('.shop-event-row').count()).toBeGreaterThan(80);
-  await expect(page.locator('.shop-event-row code').last()).toHaveText('abc/retail/purchase/completed/v1/fr/fr-0/order-1');
-  await expect(page.locator('.shop-event-row time').first()).toHaveAttribute('datetime', /2026-01-01T/);
-  await page.getByRole("button", { name: "Purchases", exact: true }).click();
-  await expect(page.locator('.shop-event-row code').last()).toHaveText('abc/retail/purchase/completed/v1/fr/fr-0/order-1');
-  expect(await page.locator('.shop-event-row').evaluateAll(rows => rows.every(row => row.getAttribute('data-kind') === 'purchase'))).toBe(true);
+  await page.goto("./");
+  await expect(
+    page.getByRole("heading", { name: "Your store, at a glance" }),
+  ).toBeVisible();
+  await page
+    .getByTestId("shop-scene")
+    .getByRole("button", { name: "Fruit & veg", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Fruit & veg", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Apples", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close inspector" }).click();
+  await approve(
+    page,
+    "Sell fresh food before it expires",
+    "Launch a 20% bakery deal",
+  );
+  await expect(page.getByRole("status")).toContainText(
+    "All prices are in sync",
+  );
 });

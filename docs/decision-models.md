@@ -1,45 +1,12 @@
-# Decision and score models
+# Manager decisions
 
-## Choices
+Four deterministic local specialist rules provide contextual recommendations. No model provider is called. A manager sees current evidence, an action, its operational benefit, a tradeoff, and an alternative. Opening the decision pauses simulation time. Resolving, closing or dismissing restores the previous manual playback state.
 
-Each situation includes an agent, peer, recommendation, triggering family, minimum day, pressure threshold, separate approve and reject actions, an immediate resource delta, and optional operational or delayed effects. The UI's qualitative previews read the same effect payload that the action executor applies. Resource caps can limit the realized change. Exact resource points are intentionally hidden during play; event traces still expose the engine's factual telemetry.
+| Recommendation | Approved behavior | Tradeoff |
+| --- | --- | --- |
+| Apple replenishment | Available colleague collects up to 18 apples from the backroom and carries them to the shelf | Colleague unavailable during task |
+| Checkout staffing | Available colleague walks to checkout 3 before it opens | €22 staffing cost and colleague committed to checkout |
+| Fresh bakery deal | Four bakery products discounted 20% in the shared price state; new shopping trips favor the deal | Less margin per item, potential reduction in expired stock |
+| Online collection | Available colleague picks four pantry units and brings them to collection; payment recorded on completion | Uses shelf stock and colleague time |
 
-The deterministic recommendation compares both options. Each immediate delta is weighted 3× when the current resource is below 32, 0.3× above 80, and 1× otherwise. A demand-increasing action loses 8 utility points when stock cover is below 90 minutes. The higher utility wins. It is a heuristic, not an optimal policy or an LLM output. Rule confidence is a bounded evidence-strength indicator, not a calibrated probability.
-
-## Delayed and operational effects
-
-- Delivery: additional inventory arrives after two decisions.
-- Positive waste risk: after three decisions, some stock spoils based on freshness and incurs additional cash loss.
-- Negative waste: clearance improves current freshness and moves stock now.
-- Fraud increase: higher ongoing pressure and a confirmed loss after two decisions.
-- Promotion: demand rises, the campaign lasts several decisions, and future queues and inventory depletion change.
-- Staffing, equipment, loyalty, margin, and supplier delay persist in operational state.
-
-Actions also alter synthetic business reports: negative cash deltas incur 8 currency units of expense per resource point; positive deltas contribute 15 units of revenue and 5 units of profit per point. Resource cash is a liquidity-health index, not a dollar balance. Sales, staffing overhead, and trading margin contribute additional interval profit.
-
-## Score out of 10,000
-
-Let `progress = decisions completed / (42 week, 30 full, or 18 quick)`. Each component is rounded:
-
-| Component         | Maximum | Formula                                                                            |
-| ----------------- | ------: | ---------------------------------------------------------------------------------- |
-| Survival          |   3,500 | `3500 × progress`                                                                  |
-| Balance           |   2,000 | `2000 × clamp((average resources − 0.25 × resource spread) / 80, 0, 1) × progress` |
-| Profit            |   1,500 | `1500 × clamp(profit / (3100 week, 2200 full, or 1300 quick), 0, 1)`                           |
-| Customers         |   1,000 | `1000 × reputation / 100 × progress`                                               |
-| Crisis management |   1,000 | `1000 × crises managed / (7 week, 5 full, or 3 quick)`                                      |
-| Collaboration     |   1,000 | `1000 × clamp(interventions / total decisions, 0, 1)`                              |
-
-Subtract `65 × stockouts + 50 × fraud incidents + 8 × wasted units`. Clamp the sum to [0, 10000]. A closing crisis counts as managed when its immediate resource utility, weighting resources below 35 twice, is nonnegative. The final report exposes the full score breakdown. Local high scores are separated by game mode.
-
-## Validation
-
-Tests cover replay determinism, rolling-window expiry, complete correlation evidence, causal events, default engine rejection behavior, duplicate-action protection, bounded resources, delayed effects, autonomy limits, six decisions per day, and full/quick completion. A seeded campaign checks strategy viability and content diversity; this is gameplay qualification, not a claim of real retail prediction accuracy.
-
-## Shop perks and one-week visits
-
-Week mode runs seven days with six decisions each. Scores use 42 decisions, seven closing crises, and a 3,100 profit target. Existing full and quick modes retain their previous horizons and scoring.
-
-Perks are passed into the engine before the first proposal. Inventory planning adds six inventory-health points, improves freshness, multiplies interval revenue by 1.05, and multiplies delayed spoilage losses by 0.5. Meal deals add six reputation points and 0.08 loyalty. Smart-store monitoring adds six security points and improves equipment health. Synchronized pricing raises the opening margin from 0.26 to 0.29. Pickup coordination starts with 2.3 effective staff instead of two; loyalty rewards add four reputation points and 0.1 loyalty.
-
-The fast store feed is presentation telemetry and does not alter these game resources. Card outcomes are added to it as causally generated manager events. All store readings remain demo data; no broker or model API is connected.
+Each recommendation can be approved or deferred once. A deferred action does not execute. Stock, demand, staffing and queue outcomes remain visible. Solace is framed as successfully coordinating event updates; the choices concern business priorities, resource limits and incomplete future demand.
