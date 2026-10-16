@@ -93,6 +93,9 @@ export interface Person {
   role: "shopper" | "employee";
   position: Point;
   route: Point[];
+  destination: Point | null;
+  moving: boolean;
+  blockedFor: number;
   stage:
     | "entering"
     | "shopping"
@@ -169,6 +172,10 @@ export interface StoreState {
   fridge: number;
   nextEvent: number;
   deliveryCount: number;
+  inventoryPolicy: "balanced" | "availability" | "lean";
+  servicePolicy: "balanced" | "service" | "cost";
+  freshPolicy: "balanced" | "waste" | "margin";
+  fulfilmentPolicy: "balanced" | "online" | "instore";
 }
 const GOODS = [
   ["Apples", 239, 110, "#bd5b49", "round"],
@@ -196,6 +203,9 @@ const GOODS = [
   ["Kitchen roll", 299, 130, "#eee8d3", "box"],
   ["Laundry liquid", 649, 280, "#83a89b", "bottle"],
 ] as const;
+export const SHOPPER_COUNT = 12;
+export const STAFF_COUNT = 6;
+export const PERSON_SPACING = 1.14;
 export const ENTRY: Point = [12, 14];
 export const STOCKROOM: Point = [8, -10];
 export const PICKUP: Point = [14, 8];
@@ -241,43 +251,163 @@ function blocked(x: number, z: number) {
     ) || TILLS.some((t) => Math.abs(x - t[0]) < 1.2 && Math.abs(z - t[1]) < 0.6)
   );
 }
-/** Grid route avoids fixtures. Each segment is clear, allowing smooth interpolation. */
-export function routeBetween(start: Point, end: Point): Point[] {
-  const from: Point = [Math.round(start[0]), Math.round(start[1])],
-    to: Point = [Math.round(end[0]), Math.round(end[1])];
+/** Routes avoid fixture footprints and occupied space, with half-metre lanes. */
+export function routeBetween(
+  start: Point,
+  end: Point,
+  occupied: Point[] = [],
+): Point[] {
+  const from: Point = [Math.round(start[0] * 2), Math.round(start[1] * 2)],
+    to: Point = [Math.round(end[0] * 2), Math.round(end[1] * 2)];
   const key = (p: Point) => `${p[0]},${p[1]}`;
-  const queue: Point[] = [from],
-    parents = new Map<string, Point | null>([[key(from), null]]);
-  for (let i = 0; i < queue.length; i++) {
-    const p = queue[i];
-    if (key(p) === key(to)) {
+  const taken = new Set<string>();
+  for (const point of occupied)
+    for (
+      let x = Math.floor((point[0] - 1.2) * 2);
+      x <= Math.ceil((point[0] + 1.2) * 2);
+      x++
+    )
+      for (
+        let z = Math.floor((point[1] - 1.2) * 2);
+        z <= Math.ceil((point[1] + 1.2) * 2);
+        z++
+      )
+        if (
+          (x / 2 - point[0]) ** 2 + (z / 2 - point[1]) ** 2 <
+          (PERSON_SPACING + 0.05) ** 2
+        )
+          taken.add(`${x},${z}`);
+  if (taken.has(key(to)) || blocked(to[0] / 2, to[1] / 2)) return [];
+  const dx = end[0] - start[0],
+    dz = end[1] - start[1],
+    forward: Point =
+      Math.abs(dx) > Math.abs(dz)
+        ? [Math.sign(dx) || 1, 0]
+        : [0, Math.sign(dz) || 1],
+    right: Point = [-forward[1], forward[0]];
+  const directions = [
+    forward,
+    right,
+    [-right[0], -right[1]],
+    [-forward[0], -forward[1]],
+  ];
+  const heuristic = (p: Point) =>
+    Math.abs(p[0] - to[0]) + Math.abs(p[1] - to[1]);
+  const frontier = [{ point: from, score: heuristic(from) }],
+    cost = new Map<string, number>([[key(from), 0]]),
+    parents = new Map<string, Point | null>([[key(from), null]]),
+    visited = new Set<string>();
+  while (frontier.length) {
+    frontier.sort((a, b) => b.score - a.score);
+    const point = frontier.pop()!.point,
+      id = key(point);
+    if (visited.has(id)) continue;
+    visited.add(id);
+    if (id === key(to)) {
       const path: Point[] = [];
-      let c: Point | null = p;
-      while (c) {
-        path.unshift(c);
-        c = parents.get(key(c)) ?? null;
+      let current: Point | null = point;
+      while (current) {
+        path.unshift([current[0] / 2, current[1] / 2]);
+        current = parents.get(key(current)) ?? null;
       }
       path.shift();
-      path.push(end);
+      path.push([...end]);
       return path;
     }
-    for (const [dx, dz] of [
-      [1, 0],
-      [0, 1],
-      [-1, 0],
-      [0, -1],
-    ]) {
-      const n: Point = [p[0] + dx, p[1] + dz];
-      if (!blocked(...n) && !parents.has(key(n))) {
-        parents.set(key(n), p);
-        queue.push(n);
+    for (const [x, z] of directions) {
+      const next: Point = [point[0] + x, point[1] + z],
+        id = key(next),
+        distance = cost.get(key(point))! + 1;
+      if (
+        !blocked(next[0] / 2, next[1] / 2) &&
+        !taken.has(id) &&
+        distance < (cost.get(id) ?? Infinity)
+      ) {
+        parents.set(id, point);
+        cost.set(id, distance);
+        frontier.push({ point: next, score: distance + heuristic(next) });
       }
     }
   }
-  return []; // No walking through fixtures if a destination is unavailable.
+  return [];
 }
-function go(p: Person, end: Point) {
-  p.route = routeBetween(p.position, end);
+function otherPeople(s: StoreState, p: Person) {
+  return s.people.filter(
+    (other) => other.id !== p.id && other.stage !== "outside",
+  );
+}
+function travelling(p: Person) {
+  return (
+    !!p.destination &&
+    Math.hypot(
+      p.position[0] - p.destination[0],
+      p.position[1] - p.destination[1],
+    ) > 0.04
+  );
+}
+function go(s: StoreState, p: Person, end: Point, exact = false) {
+  const others = otherPeople(s, p);
+  const candidates: Point[] = exact
+    ? [end]
+    : [
+        end,
+        [end[0] + 1.3, end[1]],
+        [end[0] - 1.3, end[1]],
+        [end[0], end[1] + 1.3],
+        [end[0] + 1.3, end[1] + 1.3],
+        [end[0] - 1.3, end[1] + 1.3],
+      ];
+  const target =
+    candidates.find(
+      (candidate) =>
+        !blocked(...candidate) &&
+        others.every(
+          (other) =>
+            Math.hypot(
+              other.position[0] - candidate[0],
+              other.position[1] - candidate[1],
+            ) >=
+              PERSON_SPACING + 0.05 &&
+            (!other.destination ||
+              Math.hypot(
+                other.destination[0] - candidate[0],
+                other.destination[1] - candidate[1],
+              ) >=
+                PERSON_SPACING + 0.05),
+        ),
+    ) ?? end;
+  p.destination = [...target];
+  p.route = routeBetween(
+    p.position,
+    target,
+    others.map((p) => p.position),
+  );
+  p.blockedFor = 0;
+}
+function segmentDistance(point: Point, start: Point, end: Point) {
+  const dx = end[0] - start[0],
+    dz = end[1] - start[1],
+    length = dx * dx + dz * dz;
+  const t = length
+    ? Math.max(
+        0,
+        Math.min(
+          1,
+          ((point[0] - start[0]) * dx + (point[1] - start[1]) * dz) / length,
+        ),
+      )
+    : 0;
+  return Math.hypot(point[0] - start[0] - t * dx, point[1] - start[1] - t * dz);
+}
+function clearStep(s: StoreState, p: Person, end: Point) {
+  return (
+    !blocked(...end) &&
+    otherPeople(s, p).every(
+      (other) =>
+        segmentDistance(other.position, p.position, end) >=
+        PERSON_SPACING - 1e-6,
+    )
+  );
 }
 function emit(
   s: StoreState,
@@ -355,47 +485,50 @@ export function createStore(seed = 2401): StoreState {
     recommendations: [
       {
         id: "restock",
-        title: "Keep the apple shelf full",
+        title: "Availability or leaner stock?",
         agent: "Inventory agent",
-        action: "Send a colleague to restock",
-        alternative: "Keep the team on the floor",
-        consequence: "Moves up to 18 apples from the stockroom to the shelf.",
-        tradeoff: "One colleague is busy until the shelf is replenished.",
+        action: "Protect product availability",
+        alternative: "Keep stock lean",
+        consequence:
+          "Agents keep a larger shelf buffer across every department and coordinate routine replenishment themselves.",
+        tradeoff:
+          "Fewer empty shelves, but more stock on the floor and more exposure to fresh-food waste.",
         status: "pending",
       },
       {
         id: "checkout",
-        title: "Give the queue another checkout",
+        title: "Service or lower operating costs?",
         agent: "Store operations agent",
-        action: "Open checkout 3",
-        alternative: "Keep the current two checkouts",
-        consequence: "A colleague walks over and opens another checkout.",
+        action: "Invest in customer service",
+        alternative: "Hold operating costs",
+        consequence:
+          "Give agents a staffing budget to add checkout capacity and keep queues moving.",
         tradeoff:
-          "Adds €22 in staffing cost; one fewer colleague is available for other work.",
+          "The extra capacity costs €22 and takes a colleague away from other store work.",
         status: "pending",
       },
       {
         id: "meal",
-        title: "Sell fresh food before it expires",
+        title: "Protect margin or reduce food waste?",
         agent: "Fresh food agent",
-        action: "Launch a 20% bakery deal",
-        alternative: "Keep the regular prices",
+        action: "Favor lower food waste",
+        alternative: "Protect full-price margin",
         consequence:
-          "Bakery prices update together on shelves, tills, and online. Shoppers are more likely to choose bakery items.",
+          "Let agents use a 20% deal on bakery items approaching expiry, with shelf, checkout and online prices kept in sync.",
         tradeoff:
-          "A lower margin on each item, with a better chance of selling it before expiry.",
+          "More chance of selling fresh food in time, but less profit on each discounted item.",
         status: "pending",
       },
       {
         id: "online",
-        title: "Get the collection order ready",
+        title: "Online promises or in-store capacity?",
         agent: "Order fulfilment agent",
-        action: "Prioritize the online order",
-        alternative: "Keep the colleague available",
+        action: "Prioritize online promises",
+        alternative: "Prioritize in-store shoppers",
         consequence:
-          "A colleague picks four pantry items and brings them to collection.",
+          "Agents give collection orders first call on available colleagues and stock, and coordinate picking and handover.",
         tradeoff:
-          "Uses stock and a colleague that could serve people in the shop.",
+          "Online customers get their order sooner; fewer resources remain available for people shopping in the store.",
         status: "pending",
       },
     ],
@@ -409,15 +542,22 @@ export function createStore(seed = 2401): StoreState {
     fridge: 3.6,
     nextEvent: 1,
     deliveryCount: 0,
+    inventoryPolicy: "balanced",
+    servicePolicy: "balanced",
+    freshPolicy: "balanced",
+    fulfilmentPolicy: "balanced",
   };
-  for (let i = 0; i < 32; i++) {
+  for (let i = 0; i < SHOPPER_COUNT; i++) {
     const p: Person = {
       id: i,
       role: "shopper",
-      position: [ENTRY[0] + (i % 3) * 0.35, ENTRY[1]],
+      position: [...ENTRY],
       route: [],
+      destination: null,
+      moving: false,
+      blockedFor: 0,
       stage: "entering",
-      timer: i * 0.5,
+      timer: 2 + i * 1.7,
       basket: [],
       list: [],
       visited: 0,
@@ -430,27 +570,31 @@ export function createStore(seed = 2401): StoreState {
       { length: 3 },
       (_, n) => products[(i * 7 + n * 5) % 24].id,
     );
-    if (i < 24) {
+    if (i < 8) {
       const product = products[(i * 7) % 24];
       p.position = [product.position[0] + (i % 2) * 0.3, product.position[1]];
       p.stage = "picking";
       p.timer = 0.7 + (i % 4);
     }
-    if (i >= 18 && i < 24) {
+    if (i >= 8 && i < 10) {
       p.position = [TILLS[i % 2][0] + 1.8, 10 + (i % 3) * 0.6];
       for (const productId of p.list.slice(0, 2))
         p.basket.push(...take(s, productId, 1, "shelf", "inBaskets"));
       p.visited = p.list.length;
       joinQueue(s, p);
     }
+    if (i >= 10) p.stage = "outside";
     s.people.push(p);
   }
-  for (let i = 0; i < 8; i++)
+  for (let i = 0; i < STAFF_COUNT; i++)
     s.people.push({
       id: 100 + i,
       role: "employee",
-      position: i < 2 ? [TILLS[i][0], 7] : [-13 + (i - 2) * 5, -9],
+      position: i < 2 ? [TILLS[i][0], 6.5] : [-13 + (i - 2) * 8, -9],
       route: [],
+      destination: null,
+      moving: false,
+      blockedFor: 0,
       stage: "working",
       timer: i,
       basket: [],
@@ -494,7 +638,7 @@ export function createStore(seed = 2401): StoreState {
     s,
     "operations",
     "store/opened",
-    "Paris Flagship is open. 32 shoppers, 8 colleagues.",
+    "Paris Flagship is open. A relaxed shop floor with 12 shoppers and 6 colleagues.",
   );
   emit(
     s,
@@ -504,25 +648,75 @@ export function createStore(seed = 2401): StoreState {
   );
   return s;
 }
-function move(p: Person, dt: number) {
-  let distance = dt * (p.role === "employee" ? 2.5 : 1.7 + (p.id % 4) * 0.15);
-  while (p.route.length && distance > 0) {
+function move(s: StoreState, p: Person, dt: number) {
+  p.moving = false;
+  if (p.stage === "outside" || !travelling(p)) return;
+  if (!p.route.length)
+    p.route = routeBetween(
+      p.position,
+      p.destination!,
+      otherPeople(s, p).map((p) => p.position),
+    );
+  let budget = dt * (p.role === "employee" ? 1.65 : 1.25 + (p.id % 4) * 0.07);
+  while (p.route.length && budget > 0) {
     const next = p.route[0],
       dx = next[0] - p.position[0],
       dz = next[1] - p.position[1],
-      length = Math.hypot(dx, dz);
-    if (length <= distance) {
-      p.position = [...next];
+      distance = Math.hypot(dx, dz);
+    if (distance < 0.001) {
       p.route.shift();
-      distance -= length;
-    } else {
-      p.position = [
-        p.position[0] + (dx / length) * distance,
-        p.position[1] + (dz / length) * distance,
+      continue;
+    }
+    const step = Math.min(budget, distance),
+      candidate: Point = [
+        p.position[0] + (dx / distance) * step,
+        p.position[1] + (dz / distance) * step,
       ];
-      distance = 0;
+    if (!clearStep(s, p, candidate)) break;
+    p.position = candidate;
+    p.moving = true;
+    budget -= step;
+    if (step >= distance - 0.0001) p.route.shift();
+  }
+  if (p.moving) {
+    p.blockedFor = 0;
+    return;
+  }
+  p.blockedFor += dt;
+  if (p.blockedFor < 0.6) return;
+  const target = p.route[0] ?? p.destination!,
+    dx = target[0] - p.position[0],
+    dz = target[1] - p.position[1],
+    length = Math.hypot(dx, dz) || 1;
+  // Walk to the right to pass oncoming shoppers, instead of pushing through them.
+  for (const direction of [1, -1]) {
+    const step: Point = [
+      p.position[0] - (dz / length) * 0.14 * direction,
+      p.position[1] + (dx / length) * 0.14 * direction,
+    ];
+    if (clearStep(s, p, step)) {
+      p.position = step;
+      p.moving = true;
+      break;
     }
   }
+  p.route = routeBetween(
+    p.position,
+    p.destination!,
+    otherPeople(s, p).map((p) => p.position),
+  );
+  p.blockedFor = 0;
+}
+function patrol(s: StoreState, p: Person, dt: number) {
+  if (p.id < 102 || p.taskId) return;
+  if (travelling(p)) return;
+  p.timer -= dt;
+  if (p.timer > 0) return;
+  p.visited++;
+  const product =
+    s.products[((p.id - 102) * 5 + p.visited * 7) % s.products.length];
+  go(s, p, product.position);
+  p.timer = 1.6;
 }
 function take(
   s: StoreState,
@@ -598,6 +792,8 @@ function joinQueue(s: StoreState, p: Person) {
     }))
     .sort((a, b) => a.count - b.count)[0].i;
   p.stage = "queueing";
+  p.route = [];
+  p.destination = null;
   p.queueSince = s.time;
 }
 function shopNext(s: StoreState, p: Person) {
@@ -607,20 +803,36 @@ function shopNext(s: StoreState, p: Person) {
   }
   const product = s.products.find((v) => v.id === p.list[p.visited])!;
   p.stage = "shopping";
-  go(p, [product.position[0], product.position[1] + (p.id % 3) * 0.18]);
+  go(s, p, [product.position[0], product.position[1] + (p.id % 3) * 0.18]);
 }
 export function decide(s: StoreState, id: DecisionKind, accept: boolean) {
   const rec = s.recommendations.find((r) => r.id === id)!;
   if (rec.status !== "pending") return false;
-  const employee = s.people.find(
-    (p) => p.role === "employee" && p.id >= 102 && !p.taskId,
-  );
-  if (accept && id !== "meal" && !employee) return false;
   rec.status = accept ? "applied" : "declined";
+  if (id === "restock") s.inventoryPolicy = accept ? "availability" : "lean";
+  if (id === "checkout") s.servicePolicy = accept ? "service" : "cost";
+  if (id === "online") s.fulfilmentPolicy = accept ? "online" : "instore";
+  if (id === "meal") {
+    s.freshPolicy = accept ? "waste" : "margin";
+    s.mealActive = accept;
+    if (accept)
+      for (const product of s.products.filter(
+        (p) => p.department === "bakery",
+      )) {
+        product.price = Math.round(product.regularPrice * 0.8);
+        emit(
+          s,
+          "pricing",
+          `price/${product.id}/updated`,
+          `${product.name} · €${(product.price / 100).toFixed(2)} on shelf, till & online`,
+          "bakery",
+        );
+      }
+  }
   emit(
     s,
     "agents",
-    `agent/${id}/${accept ? "approved" : "deferred"}`,
+    `strategy/${id}/updated`,
     accept ? rec.action : rec.alternative,
     id === "meal"
       ? "bakery"
@@ -630,48 +842,95 @@ export function decide(s: StoreState, id: DecisionKind, accept: boolean) {
           ? "checkouts"
           : "pickup",
   );
-  if (!accept) return true;
-  if (id === "meal") {
-    s.mealActive = true;
-    for (const p of s.products.filter((p) => p.department === "bakery")) {
-      p.price = Math.round(p.regularPrice * 0.8);
-      emit(
+  dispatchWork(s);
+  return true;
+}
+function assignTask(
+  s: StoreState,
+  kind: "restock" | "checkout" | "online",
+  productId: string,
+  id: string,
+) {
+  const person = s.people.find(
+    (p) => p.role === "employee" && p.id >= 102 && !p.taskId,
+  );
+  if (!person) return false;
+  const task: StaffTask = {
+    id,
+    kind,
+    productId,
+    employeeId: person.id,
+    stage: "source",
+    timer: 0,
+    cargo: [],
+  };
+  s.tasks.push(task);
+  person.taskId = id;
+  person.stage = "task";
+  go(
+    s,
+    person,
+    kind === "restock"
+      ? STOCKROOM
+      : kind === "checkout"
+        ? [4, 6.5]
+        : s.products.find((p) => p.id === productId)!.position,
+  );
+  return true;
+}
+function dispatchWork(s: StoreState) {
+  if (
+    s.servicePolicy === "service" &&
+    !s.checkouts[2] &&
+    !s.tasks.some((t) => t.kind === "checkout")
+  )
+    assignTask(s, "checkout", "sku-0", "task-checkout");
+  if (
+    s.fulfilmentPolicy === "online" &&
+    !s.onlineComplete &&
+    !s.tasks.some((t) => t.kind === "online")
+  )
+    assignTask(s, "online", "sku-12", "task-online");
+  if (s.time < 3 && s.inventoryPolicy !== "availability") return;
+  const threshold =
+    s.inventoryPolicy === "availability"
+      ? 9
+      : s.inventoryPolicy === "lean"
+        ? 3
+        : 5;
+  while (
+    s.tasks.filter((t) => t.kind === "restock" && t.stage !== "complete")
+      .length < 2
+  ) {
+    const product = s.products.find(
+      (p) =>
+        stock(s, p.id).shelf < threshold &&
+        stock(s, p.id).backroom > 0 &&
+        !s.tasks.some((t) => t.productId === p.id && t.stage !== "complete"),
+    );
+    if (
+      !product ||
+      !assignTask(
         s,
-        "pricing",
-        `price/${p.id}/updated`,
-        `${p.name} · €${(p.price / 100).toFixed(2)} on shelf, till & online`,
-        "bakery",
-      );
-    }
-  } else {
-    const task: StaffTask = {
-      id: `task-${id}`,
-      kind: id,
-      employeeId: employee!.id,
-      stage: "source",
-      timer: 0,
-      productId: id === "restock" ? "sku-0" : "sku-12",
-      cargo: [],
-    };
-    s.tasks.push(task);
-    employee!.taskId = task.id;
-    employee!.stage = "task";
-    go(
-      employee!,
-      id === "restock"
-        ? STOCKROOM
-        : id === "checkout"
-          ? [4, 7]
-          : s.products[12].position,
+        "restock",
+        product.id,
+        `routine-${s.tick}-${s.tasks.length}`,
+      )
+    )
+      break;
+    emit(
+      s,
+      "agents",
+      "agent/inventory/task-assigned",
+      `Agents arranged routine replenishment for ${product.name.toLowerCase()}.`,
+      product.department,
     );
   }
-  return true;
 }
 function staffStep(s: StoreState, p: Person, dt: number) {
   const task = s.tasks.find((t) => t.id === p.taskId);
   if (!task || task.stage === "complete") return;
-  move(p, dt);
-  if (p.route.length) return;
+  if (travelling(p)) return;
   task.timer += dt;
   if (task.timer < 2) return;
   task.timer = 0;
@@ -710,10 +969,10 @@ function staffStep(s: StoreState, p: Person, dt: number) {
       const next =
         s.products[12 + task.cargo.reduce((n, l) => n + l.quantity, 0)];
       task.productId = next.id;
-      go(p, next.position);
+      go(s, p, next.position);
     } else {
       task.stage = "destination";
-      go(p, task.kind === "restock" ? product.position : PICKUP);
+      go(s, p, task.kind === "restock" ? product.position : PICKUP);
     }
     emit(
       s,
@@ -757,12 +1016,13 @@ export function advance(s: StoreState, dt: number) {
   s.time += dt;
   s.tick++;
   for (const p of s.people) {
+    move(s, p, dt);
     if (p.role === "employee") {
       staffStep(s, p, dt);
+      patrol(s, p, dt);
       continue;
     }
-    move(p, dt);
-    if (p.route.length) continue;
+    if (travelling(p)) continue;
     p.timer -= dt;
     if (p.stage === "entering" && p.timer <= 0) shopNext(s, p);
     else if (p.stage === "shopping") {
@@ -797,11 +1057,29 @@ export function advance(s: StoreState, dt: number) {
       settle(s, p.basket, "till", "inBaskets");
       p.basket = [];
       p.stage = "leaving";
-      go(p, ENTRY);
+      go(s, p, ENTRY, true);
     } else if (p.stage === "leaving") {
       p.stage = "outside";
       p.timer = 3 + (p.id % 5);
     } else if (p.stage === "outside" && p.timer <= 0) {
+      if (
+        otherPeople(s, p).some(
+          (other) =>
+            Math.hypot(
+              other.position[0] - ENTRY[0],
+              other.position[1] - ENTRY[1],
+            ) < 1.8 ||
+            (other.stage === "leaving" &&
+              travelling(other) &&
+              Math.hypot(
+                other.position[0] - ENTRY[0],
+                other.position[1] - ENTRY[1],
+              ) < 3),
+        )
+      )
+        continue;
+      p.position = [...ENTRY];
+      p.destination = null;
       p.visited = 0;
       p.list = Array.from(
         { length: 3 },
@@ -829,22 +1107,27 @@ export function advance(s: StoreState, dt: number) {
       .filter((p) => p.stage === "queueing" && p.checkout === i)
       .sort((a, b) => a.queueSince - b.queueSince || a.id - b.id);
     queue.forEach((p, n) => {
-      const target: Point = [TILLS[i][0] + 1.8, 8.3 + n * 0.32];
+      const target: Point = [
+        TILLS[i][0] + 1.8 + (n >= 4 ? 1.3 : 0),
+        9.6 + Math.min(n, 7 - n) * 1.16,
+      ];
       if (
-        !p.route.length &&
-        Math.hypot(p.position[0] - target[0], p.position[1] - target[1]) > 0.12
+        !p.destination ||
+        Math.hypot(p.destination[0] - target[0], p.destination[1] - target[1]) >
+          0.1
       )
-        go(p, target);
+        go(s, p, target, true);
     });
     if (
       !s.people.some((p) => p.stage === "paying" && p.checkout === i) &&
       queue[0] &&
-      !queue[0].route.length
+      !travelling(queue[0])
     ) {
       s.queueSamples.push(s.time - queue[0].queueSince);
       if (s.queueSamples.length > 100) s.queueSamples.shift();
       queue[0].stage = "paying";
       queue[0].timer = 4;
+      go(s, queue[0], [TILLS[i][0] + 1.8, 8.3], true);
       emit(
         s,
         "operations",
@@ -870,43 +1153,11 @@ export function advance(s: StoreState, dt: number) {
       if (p) {
         p.checkout = 2;
         p.route = [];
+        p.destination = null;
       }
     }
   }
-  // Routine replenishment is delegated to two floor colleagues. Manager approvals
-  // can prioritize work immediately instead of waiting for the routine stock round.
-  if (s.time > 90)
-    for (const colleague of s.people.filter((p) => p.id >= 106 && !p.taskId)) {
-      const product = s.products.find(
-        (product) =>
-          stock(s, product.id).shelf < 5 &&
-          stock(s, product.id).backroom > 0 &&
-          !s.tasks.some(
-            (t) => t.productId === product.id && t.stage !== "complete",
-          ),
-      );
-      if (!product) break;
-      const task: StaffTask = {
-        id: `routine-${s.tick}-${colleague.id}`,
-        kind: "restock",
-        employeeId: colleague.id,
-        stage: "source",
-        timer: 0,
-        productId: product.id,
-        cargo: [],
-      };
-      s.tasks.push(task);
-      colleague.taskId = task.id;
-      colleague.stage = "task";
-      go(colleague, STOCKROOM);
-      emit(
-        s,
-        "agents",
-        `agent/inventory/task-assigned`,
-        `Routine replenishment assigned for ${product.name.toLowerCase()}.`,
-        product.department,
-      );
-    }
+  dispatchWork(s);
   for (const b of s.batches)
     if (b.expiresAt <= s.time && b.shelf + b.backroom + b.receiving > 0) {
       const n = b.shelf + b.backroom + b.receiving;
@@ -1008,8 +1259,8 @@ export function metrics(s: StoreState) {
 }
 export function evidence(s: StoreState, id: DecisionKind) {
   if (id === "restock") {
-    const n = stock(s, "sku-0");
-    return `${n.shelf} apples on the shelf · ${n.backroom} in the stockroom.`;
+    const low = s.products.filter((p) => stock(s, p.id).shelf < 9).length;
+    return `${metrics(s).availability.toFixed(0)}% product availability · ${low} ${low === 1 ? "shelf" : "shelves"} below a comfortable buffer.`;
   }
   if (id === "checkout")
     return `${metrics(s).queue} shoppers waiting · ${s.checkouts.filter(Boolean).length} checkouts open.`;
@@ -1022,5 +1273,5 @@ export function evidence(s: StoreState, id: DecisionKind) {
     const earliest = Math.min(...batches.map((b) => b.expiresAt));
     return `${batches.reduce((n, b) => n + b.shelf, 0)} bakery items on shelves · ${Number.isFinite(earliest) ? `first expiry in ${Math.max(0, Math.ceil((earliest - s.time) / 60))} min` : "shelf awaiting replenishment"}.`;
   }
-  return "A four-item pantry order is waiting to be picked.";
+  return `${s.onlineComplete ? "Collection promise met" : "An online order is waiting"} · ${metrics(s).queue} shoppers waiting in store.`;
 }

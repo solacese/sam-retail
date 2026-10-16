@@ -342,6 +342,141 @@ function DepartmentFixture({
     </group>
   );
 }
+const hairDome = new THREE.SphereGeometry(
+  0.337,
+  12,
+  8,
+  0,
+  Math.PI * 2,
+  0,
+  1.36,
+);
+const curlGeometry = new THREE.SphereGeometry(1, 9, 7);
+function Hair({ id }: { id: number }) {
+  const style = id % 6,
+    color = ["#44332b", "#b67948", "#70503d", "#302d2a", "#c7ab75", "#93958d"][
+      Math.floor(id / 3) % 6
+    ];
+  const puff = (
+    at: [number, number, number],
+    scale: [number, number, number],
+    key: string,
+  ) => (
+    <mesh
+      key={key}
+      position={at}
+      scale={scale}
+      geometry={curlGeometry}
+      material={material(color)}
+      castShadow
+      dispose={null}
+    />
+  );
+  return (
+    <group>
+      {style !== 3 && (
+        <mesh
+          geometry={hairDome}
+          material={material(color)}
+          position={[0, 0.02, -0.025]}
+          scale={[1, style === 0 ? 0.8 : 1, 1]}
+          castShadow
+          dispose={null}
+        />
+      )}
+      {style === 0 &&
+        [-0.15, 0, 0.15].map((x, i) => (
+          <group key={i} position={[x, 0.22, 0.22]} rotation={[0, 0, -0.16]}>
+            <SoftBox at={[0, 0, 0]} size={[0.15, 0.09, 0.14]} color={color} />
+          </group>
+        ))}
+      {style === 1 && (
+        <group rotation={[0, 0, -0.3]} position={[-0.055, 0.29, 0.11]}>
+          <SoftBox at={[0, 0, 0]} size={[0.43, 0.14, 0.3]} color={color} />
+          <SoftBox
+            at={[-0.11, -0.065, 0.13]}
+            size={[0.17, 0.18, 0.15]}
+            color={color}
+          />
+        </group>
+      )}
+      {style === 2 && (
+        <>
+          <SoftBox
+            at={[-0.275, -0.045, -0.055]}
+            size={[0.17, 0.39, 0.33]}
+            color={color}
+          />
+          <SoftBox
+            at={[0.275, -0.045, -0.055]}
+            size={[0.17, 0.39, 0.33]}
+            color={color}
+          />
+          <SoftBox
+            at={[0, -0.09, -0.245]}
+            size={[0.47, 0.37, 0.17]}
+            color={color}
+          />
+          <SoftBox
+            at={[0, 0.15, 0.26]}
+            size={[0.46, 0.14, 0.12]}
+            color={color}
+          />
+        </>
+      )}
+      {style === 3 && (
+        <>
+          {Array.from({ length: 9 }, (_, i) => {
+            const angle = (i * Math.PI * 2) / 9;
+            return puff(
+              [
+                Math.cos(angle) * 0.245,
+                0.16 + Math.sin(i * 2) * 0.025,
+                Math.sin(angle) * 0.245 - 0.015,
+              ],
+              [0.135, 0.14, 0.135],
+              `curl-${i}`,
+            );
+          })}
+          {[-0.14, 0, 0.14].map((x, i) =>
+            puff([x, 0.31, -0.02], [0.15, 0.12, 0.16], `top-${i}`),
+          )}
+        </>
+      )}
+      {style === 4 && (
+        <>
+          {puff([0, 0.23, -0.33], [0.18, 0.17, 0.18], "bun")}
+          <SoftBox
+            at={[-0.27, 0.06, -0.02]}
+            size={[0.085, 0.24, 0.19]}
+            color={color}
+          />
+        </>
+      )}
+      {style === 5 && (
+        <>
+          {[-1, 1].map((side) => (
+            <group key={side}>
+              {puff(
+                [side * 0.27, -0.035, -0.13],
+                [0.12, 0.2, 0.17],
+                `wave-${side}`,
+              )}
+              {puff(
+                [side * 0.23, -0.16, -0.23],
+                [0.13, 0.12, 0.14],
+                `end-${side}`,
+              )}
+            </group>
+          ))}
+          <group position={[0.09, 0.25, 0.18]} rotation={[0, 0, 0.2]}>
+            <SoftBox at={[0, 0, 0]} size={[0.3, 0.15, 0.18]} color={color} />
+          </group>
+        </>
+      )}
+    </group>
+  );
+}
 function Human({
   id,
   store,
@@ -358,6 +493,7 @@ function Human({
     legA = useRef<THREE.Group>(null!),
     legB = useRef<THREE.Group>(null!),
     arm = useRef<THREE.Group>(null!),
+    rightArm = useRef<THREE.Group>(null!),
     head = useRef<THREE.Group>(null!);
   const angle = useRef(0),
     previous = useRef(
@@ -382,10 +518,12 @@ function Human({
     root.current.position.lerp(target, factor);
     const dx = target.x - previous.current.x,
       dz = target.z - previous.current.z,
-      walking = p.route.length > 0;
+      walking = p.moving;
     if (Math.abs(dx) + Math.abs(dz) > 0.001) angle.current = Math.atan2(dx, dz);
     if (p.stage === "picking") angle.current = Math.PI;
     if (p.stage === "paying") angle.current = -Math.PI / 2;
+    if (p.role === "employee" && p.stage === "working" && !walking)
+      angle.current = p.id < 102 || task?.kind === "checkout" ? 0 : Math.PI;
     root.current.rotation.y +=
       Math.atan2(
         Math.sin(angle.current - root.current.rotation.y),
@@ -403,8 +541,17 @@ function Human({
           ? -0.8
           : walking
             ? Math.sin(phase) * 0.2
-            : 0
+            : p.role === "employee"
+              ? -0.65 + Math.sin(phase * 0.4) * 0.3
+              : Math.sin(phase * 0.2) * 0.06
       : 0;
+    rightArm.current.rotation.x = carrying
+      ? -0.9
+      : gesture && p.role === "employee" && !walking
+        ? -0.5 + Math.sin(phase * 0.4 + 1) * 0.2
+        : 0;
+    head.current.position.y =
+      1.39 + (gesture && !walking ? Math.sin(phase * 0.2) * 0.013 : 0);
     head.current.rotation.z = gesture && p.stage === "picking" ? -0.15 : 0;
     root.current.position.y =
       gesture && walking ? Math.abs(Math.sin(phase)) * 0.025 : 0;
@@ -440,27 +587,34 @@ function Human({
           <sphereGeometry args={[0.32, 12, 10]} />
           <meshStandardMaterial color={person.skin} />
         </mesh>
-        <mesh position={[0, 0.16, -0.04]} scale={[1, 0.65, 1]} castShadow>
-          <sphereGeometry args={[0.33, 12, 8]} />
-          <meshStandardMaterial
-            color={
-              id % 3 === 0 ? "#a48b65" : id % 3 === 1 ? "#463b35" : "#755542"
-            }
-          />
-        </mesh>
+        <Hair id={id} />
         {[-0.11, 0.11].map((x) => (
           <mesh key={x} position={[x, 0.02, 0.29]}>
             <sphereGeometry args={[0.027, 6, 6]} />
             <meshBasicMaterial color="#334137" />
           </mesh>
         ))}
-        {employee && (
-          <SoftBox
-            at={[0, 0.24, 0.01]}
-            size={[0.65, 0.15, 0.58]}
-            color={GREEN}
+        {[-0.31, 0.31].map((x) => (
+          <mesh
+            key={`ear-${x}`}
+            position={[x, -0.035, 0]}
+            scale={[0.065, 0.09, 0.065]}
+            geometry={curlGeometry}
+            material={material(person.skin)}
+            dispose={null}
           />
-        )}
+        ))}
+        <mesh
+          position={[0, -0.06, 0.3]}
+          scale={[0.045, 0.05, 0.065]}
+          geometry={curlGeometry}
+          material={material(person.skin)}
+          dispose={null}
+        />
+        <mesh position={[0, -0.12, 0.3]} rotation={[0, 0, Math.PI]}>
+          <torusGeometry args={[0.065, 0.009, 4, 10, Math.PI]} />
+          <meshBasicMaterial color="#7e5141" />
+        </mesh>
       </group>
       <group ref={arm} position={[-0.36, 1.05, 0]}>
         <SoftBox
@@ -469,11 +623,13 @@ function Human({
           color={person.skin}
         />
       </group>
-      <SoftBox
-        at={[0.36, 0.83, 0]}
-        size={[0.16, 0.43, 0.19]}
-        color={person.skin}
-      />
+      <group ref={rightArm} position={[0.36, 1.05, 0]}>
+        <SoftBox
+          at={[0, -0.2, 0]}
+          size={[0.16, 0.42, 0.19]}
+          color={person.skin}
+        />
+      </group>
       {!employee && (
         <group position={[0.48, 0.58, 0.2]}>
           <Box at={[0, 0, 0]} size={[0.48, 0.28, 0.38]} color="#c49a5c" />

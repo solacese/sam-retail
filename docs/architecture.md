@@ -12,7 +12,7 @@ The flagship is authoritative in one browser-local `StoreState`. `advance(state,
 
 Every product batch tracks `received`, `shelf`, `backroom`, `receiving`, `inBaskets`, `inTransit`, `sold`, `waste`, and `expiresAt`. The sum of all locations equals received units. Picks consume earliest-expiring shelf stock. Only payment moves basket units to sold and creates revenue. Staff collect real units before replenishing or completing collection orders. Expired shelf, backroom and receiving stock moves to waste.
 
-Fixtures have fixed footprints. Grid routes avoid their occupied cells; continuous movement follows those routes. People stop when paused. Employee tasks reserve colleagues so two approvals cannot assign the same person simultaneously.
+Fixtures have fixed footprints. Occupancy-aware A* routes use half-metre lanes. Each continuous movement segment checks personal-space clearance against other visible people; blocked walkers reroute or step aside rather than crossing another character. Interaction destinations are reserved, queue slots are separated from the active payment position, and entry is staggered. Twelve shopper journeys and six colleagues keep the floor readable. Unassigned floor staff make department inspection rounds; checkout staff have working gestures. People stop when paused. Employee tasks reserve colleagues so simultaneous priorities cannot assign one person twice.
 
 ## Boundaries
 
@@ -21,3 +21,5 @@ There is no backend, persistence, broker connection or live model call. Reset re
 ## Validation
 
 Unit tests exercise conservation through transactions, delivery, replenishment and expiry; seeded replay; staffing; price consistency; decisions applying once; route safety and bounded history. Browser coverage checks desktop/mobile layouts, playback, modal pause restoration, inspector prices, event filtering, map profiles, reduced motion, reset and unsupported WebGL.
+
+Manager choices set inventory, service, freshness and fulfilment policies. Local agents dispatch individual staff tasks under those policies. Inventory thresholds apply across departments, rather than treating a single shelf as a management decision.

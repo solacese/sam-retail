@@ -49,11 +49,11 @@ function conservation(s: StoreState) {
   }
 }
 describe("coherent retail simulation", () => {
-  it("starts with 24 products, 32 shoppers and eight colleagues", () => {
+  it("starts with 24 products, 12 shoppers and six colleagues", () => {
     const s = createStore();
     expect(s.products).toHaveLength(24);
-    expect(s.people.filter((p) => p.role === "shopper")).toHaveLength(32);
-    expect(s.people.filter((p) => p.role === "employee")).toHaveLength(8);
+    expect(s.people.filter((p) => p.role === "shopper")).toHaveLength(12);
+    expect(s.people.filter((p) => p.role === "employee")).toHaveLength(6);
     expect(s.transactions).toHaveLength(0);
     conservation(s);
   });
@@ -214,5 +214,72 @@ describe("retailer outcomes", () => {
       true,
     );
     conservation(s);
+  });
+});
+
+describe("shop-floor movement and manager priorities", () => {
+  it("keeps visible people physically separated through arrivals, queueing, tasks and exits", () => {
+    for (const seed of [42, 2401, 991]) {
+      const s = createStore(seed);
+      for (const kind of ["restock", "checkout", "online"] as const)
+        decide(s, kind, true);
+      let smallest = Infinity;
+      for (let tick = 0; tick < 1600; tick++) {
+        advance(s, 0.1);
+        const visible = s.people.filter((p) => p.stage !== "outside");
+        for (let a = 0; a < visible.length; a++)
+          for (let b = a + 1; b < visible.length; b++)
+            smallest = Math.min(
+              smallest,
+              Math.hypot(
+                visible[a].position[0] - visible[b].position[0],
+                visible[a].position[1] - visible[b].position[1],
+              ),
+            );
+      }
+      expect(smallest).toBeGreaterThanOrEqual(1.14 - 1e-6);
+      expect(s.transactions.length).toBeGreaterThan(8);
+    }
+  });
+  it("gives every floor colleague meaningful movement instead of parking them at the back wall", () => {
+    const s = createStore(),
+      travelled = new Map(s.people.map((p) => [p.id, 0]));
+    for (let tick = 0; tick < 900; tick++) {
+      const before = new Map(s.people.map((p) => [p.id, [...p.position]]));
+      advance(s, 0.1);
+      for (const p of s.people) {
+        const prev = before.get(p.id)!;
+        travelled.set(
+          p.id,
+          travelled.get(p.id)! +
+            Math.hypot(p.position[0] - prev[0], p.position[1] - prev[1]),
+        );
+      }
+    }
+    for (const p of s.people.filter((p) => p.id >= 102))
+      expect(travelled.get(p.id)).toBeGreaterThan(10);
+    for (const p of s.people.filter((p) => p.role === "shopper"))
+      expect(travelled.get(p.id)).toBeGreaterThan(10);
+  });
+  it("lets managers set opposing business policies while agents handle individual tasks", () => {
+    const available = createStore(),
+      lean = createStore();
+    decide(available, "restock", true);
+    decide(lean, "restock", false);
+    expect(available.inventoryPolicy).toBe("availability");
+    expect(lean.inventoryPolicy).toBe("lean");
+    expect(available.recommendations[0].title).toBe(
+      "Availability or leaner stock?",
+    );
+    decide(lean, "online", false);
+    expect(lean.fulfilmentPolicy).toBe("instore");
+    expect(lean.tasks.some((t) => t.kind === "online")).toBe(false);
+    decide(available, "checkout", true);
+    expect(available.servicePolicy).toBe("service");
+    expect(available.checkouts[2]).toBe(false);
+    run(available, 80);
+    expect(available.checkouts[2]).toBe(true);
+    conservation(available);
+    conservation(lean);
   });
 });

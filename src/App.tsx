@@ -227,7 +227,7 @@ function Inspector({
                   (p) => p.role === "employee" && p.id >= 102 && !p.taskId,
                 ).length
               }{" "}
-              / 8
+              / 6
             </strong>
           </div>
           <div className="detail-line">
@@ -243,19 +243,21 @@ function Inspector({
   );
 }
 function actionStatus(state: StoreState, id: DecisionKind) {
-  if (id === "meal") return "Bakery deal is live";
-  const task = state.tasks.find((t) => t.id === `task-${id}`);
-  if (task?.stage !== "complete")
-    return id === "checkout"
-      ? "Colleague on the way"
-      : id === "online"
-        ? "Order being picked"
-        : "Replenishment underway";
-  return id === "checkout"
-    ? "Checkout 3 is open"
-    : id === "online"
-      ? "Ready for collection"
-      : "Shelf replenished";
+  return id === "restock"
+    ? state.inventoryPolicy === "availability"
+      ? "Availability prioritized"
+      : "Lean stock prioritized"
+    : id === "checkout"
+      ? state.servicePolicy === "service"
+        ? "Service budget approved"
+        : "Operating costs held"
+      : id === "meal"
+        ? state.freshPolicy === "waste"
+          ? "Waste reduction prioritized"
+          : "Full-price margin protected"
+        : state.fulfilmentPolicy === "online"
+          ? "Online promises prioritized"
+          : "In-store shoppers prioritized";
 }
 export default function App() {
   const [panel, setPanel] = useState<
@@ -526,9 +528,7 @@ export default function App() {
                     <span className="rec-link">
                       {r.status === "pending"
                         ? "Review decision"
-                        : r.status === "applied"
-                          ? actionStatus(s, r.id)
-                          : "Kept current plan"}{" "}
+                        : actionStatus(s, r.id)}{" "}
                       {r.status === "pending" && <ArrowRight size={15} />}
                     </span>
                   </button>
@@ -623,14 +623,11 @@ export default function App() {
                 if (sim.choose(rec.id, true)) {
                   setNotice(
                     rec.id === "meal"
-                      ? "Bakery deal is live. All prices are in sync."
-                      : "Approved. Your colleague is on the way.",
+                      ? "Waste reduction policy is active. All prices are in sync."
+                      : "Priority set. Your agents will coordinate the store work.",
                   );
                   setDecision(null);
-                } else
-                  setNotice(
-                    "All colleagues are busy. Try again after a task finishes.",
-                  );
+                } else setNotice("That priority has already been set.");
               }}
             >
               {rec.action}
@@ -641,7 +638,7 @@ export default function App() {
               onClick={() => {
                 sim.choose(rec.id, false);
                 setNotice(
-                  "Current plan kept. Your team will continue as before.",
+                  "Priority set. Your agents will follow this approach.",
                 );
                 setDecision(null);
               }}

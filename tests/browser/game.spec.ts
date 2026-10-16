@@ -59,7 +59,7 @@ test("manual pause, decision pause and resume preserve playback state", async ({
   const initial = await page.getByTestId("store-clock").innerText();
   await page.waitForTimeout(1100);
   await expect(page.getByTestId("store-clock")).toHaveText(initial);
-  await review(page, "Keep the apple shelf full");
+  await review(page, "Availability or leaner stock?");
   await page.waitForTimeout(1100);
   await expect(page.getByTestId("store-clock")).toHaveText(initial);
   await page.getByRole("button", { name: "Close dialog" }).click();
@@ -69,7 +69,7 @@ test("manual pause, decision pause and resume preserve playback state", async ({
   await page
     .getByRole("button", { name: "Play simulation", exact: true })
     .click();
-  await review(page, "Keep the apple shelf full");
+  await review(page, "Availability or leaner stock?");
   const frozen = await page.getByTestId("store-clock").innerText();
   await page.waitForTimeout(1100);
   await expect(page.getByTestId("store-clock")).toHaveText(frozen);
@@ -91,8 +91,8 @@ test("deal updates visible shelf prices and emits filtered pricing history", asy
   await page.getByRole("button", { name: "Close inspector" }).click();
   await approve(
     page,
-    "Sell fresh food before it expires",
-    "Launch a 20% bakery deal",
+    "Protect margin or reduce food waste?",
+    "Favor lower food waste",
   );
   await page
     .getByRole("button", { name: /Bakery/ })
@@ -187,16 +187,19 @@ test("reduced motion preserves useful operations and untimed decisions", async (
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await openStore(page);
-  await review(page, "Get the collection order ready");
+  await review(page, "Online promises or in-store capacity?");
   await expect(page.getByText("What happens", { exact: true })).toBeVisible();
   await expect(page.getByText("The tradeoff", { exact: true })).toBeVisible();
   const t = await page.getByTestId("store-clock").innerText();
   await page.waitForTimeout(1500);
   await expect(page.getByTestId("store-clock")).toHaveText(t);
   await page
-    .getByRole("button", { name: "Keep the colleague available", exact: true })
+    .getByRole("button", { name: "Prioritize in-store shoppers", exact: true })
     .click();
   await expect(page.locator(".recommendation.declined")).toHaveCount(1);
+  await expect(
+    page.getByText("In-store shoppers prioritized", { exact: true }),
+  ).toBeVisible();
 });
 test("without WebGL, operational view and decisions still work", async ({
   page,
@@ -226,10 +229,38 @@ test("without WebGL, operational view and decisions still work", async ({
   await page.getByRole("button", { name: "Close inspector" }).click();
   await approve(
     page,
-    "Sell fresh food before it expires",
-    "Launch a 20% bakery deal",
+    "Protect margin or reduce food waste?",
+    "Favor lower food waste",
   );
   await expect(page.getByRole("status")).toContainText(
     "All prices are in sync",
   );
+});
+
+test("manager decisions set store priorities instead of assigning individual shelf jobs", async ({
+  page,
+}) => {
+  await openStore(page);
+  await pause(page);
+  await approve(
+    page,
+    "Availability or leaner stock?",
+    "Protect product availability",
+  );
+  await expect(
+    page.getByText("Availability prioritized", { exact: true }),
+  ).toBeVisible();
+  await review(page, "Service or lower operating costs?");
+  await page
+    .getByRole("button", { name: "Hold operating costs", exact: true })
+    .click();
+  await expect(
+    page.getByText("Operating costs held", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: "Send a colleague to restock",
+      exact: true,
+    }),
+  ).toHaveCount(0);
 });
