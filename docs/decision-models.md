@@ -9,6 +9,8 @@ Four deterministic local specialist rules ask the manager to choose business pri
 | Freshness / margin | Favor lower food waste | Protect full-price margin | A bakery deal synchronizes shelf, checkout and online prices and affects demand |
 | Online / in-store | Prioritize online promises | Prioritize in-store shoppers | Online priority dispatches a colleague for the collection order; in-store priority leaves the capacity on the floor |
 
-Each priority can be chosen once per run. Both options set an explicit policy, shown in the recommendation's outcome text. A policy remains accepted when colleagues are busy; agents dispatch the task when capacity becomes available. Stock conservation, price consistency and business outcomes use the same simulation as the scene.
+At most two pending priorities appear at a time; resolving a choice replaces it with the next queued one. Recent decisions move to “Your choices in action”, whose text follows actual task progress. A bakery deal immediately redirects two eligible shoppers, changes prices and adds a gently swaying promotion sign. Staff tasks get readable shop-floor labels; checkout groceries move along the belt.
+
+Each priority can be chosen once per run. Both options set an explicit policy, shown in the recent outcomes. A policy remains accepted when colleagues are busy; agents dispatch the task when capacity becomes available. Stock conservation, price consistency and business outcomes use the same simulation as the scene.
 
 The manager weighs service, staffing cost, margin, waste and uncertain demand. Solace is framed as successfully coordinating updates and work across the store.

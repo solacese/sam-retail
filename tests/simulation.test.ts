@@ -4,6 +4,10 @@ import {
   createStore,
   decide,
   DEPARTMENTS,
+  ENTRY,
+  FIXTURE_WIDTH,
+  visibleRecommendations,
+  decisionImpact,
   metrics,
   routeBetween,
   stock,
@@ -281,5 +285,88 @@ describe("shop-floor movement and manager priorities", () => {
     expect(available.checkouts[2]).toBe(true);
     conservation(available);
     conservation(lean);
+  });
+});
+
+describe("expanded store and visible decision consequences", () => {
+  it("sends full-store shoppers to all six departments and keeps routes clear of widened fixtures", () => {
+    const s = createStore(),
+      visits = new Map<number, Set<string>>();
+    for (let tick = 0; tick < 3000; tick++) {
+      advance(s, 0.1);
+      for (const p of s.people.filter(
+        (p) => p.role === "shopper" && p.stage === "picking",
+      )) {
+        const department = s.products.find(
+          (v) => v.id === p.list[p.visited],
+        )!.department;
+        if (!visits.has(p.id)) visits.set(p.id, new Set());
+        visits.get(p.id)!.add(department);
+      }
+    }
+    expect(
+      [...visits.values()].filter((v) => v.size === 6).length,
+    ).toBeGreaterThanOrEqual(4);
+    for (const d of DEPARTMENTS) {
+      const path = routeBetween(ENTRY, [d.position[0], d.position[1] + 2]);
+      expect(path.length).toBeGreaterThan(0);
+      let previous = ENTRY;
+      for (const target of path) {
+        const steps = Math.max(
+          1,
+          Math.ceil(
+            Math.hypot(target[0] - previous[0], target[1] - previous[1]) / 0.1,
+          ),
+        );
+        for (let n = 1; n <= steps; n++) {
+          const x = previous[0] + ((target[0] - previous[0]) * n) / steps;
+          const z = previous[1] + ((target[1] - previous[1]) * n) / steps;
+          for (const fixture of DEPARTMENTS)
+            expect(
+              Math.abs(x - fixture.position[0]) < FIXTURE_WIDTH / 2 + 0.3 &&
+                Math.abs(z - fixture.position[1]) < 1.3,
+            ).toBe(false);
+        }
+        previous = target;
+      }
+    }
+    // Line-of-sight smoothing removes the tiny grid zigzags.
+    expect(routeBetween([-18, -10], [18, -10])).toHaveLength(1);
+    conservation(s);
+  });
+  it("offers two decisions at a time and replaces resolved choices instead of accumulating cards", () => {
+    const s = createStore();
+    expect(visibleRecommendations(s).map((r) => r.id)).toEqual([
+      "restock",
+      "meal",
+    ]);
+    for (const kind of ["meal", "checkout", "restock", "online"] as const) {
+      expect(visibleRecommendations(s).length).toBeLessThanOrEqual(2);
+      decide(s, kind, true);
+    }
+    expect(visibleRecommendations(s)).toHaveLength(0);
+    expect(s.decisionLog).toHaveLength(4);
+    decide(s, "meal", false);
+    expect(s.decisionLog).toHaveLength(4);
+  });
+  it("a bakery deal redirects real shoppers and displays progress from actual tasks", () => {
+    const s = createStore();
+    const before = s.people.map((p) => p.list.length);
+    decide(s, "meal", true);
+    const changed = s.people.filter((p, i) => p.list.length > before[i]);
+    expect(changed).toHaveLength(2);
+    for (const p of changed) {
+      expect(p.stage).toBe("shopping");
+      expect(
+        s.products.find((v) => v.id === p.list[p.visited])!.department,
+      ).toBe("bakery");
+      expect(p.destination).not.toBeNull();
+    }
+    decide(s, "checkout", true);
+    expect(decisionImpact(s, "checkout")).toContain("walking to checkout 3");
+    run(s, 50);
+    expect(s.checkouts[2]).toBe(true);
+    expect(decisionImpact(s, "checkout")).toContain("Checkout 3 is open");
+    conservation(s);
   });
 });

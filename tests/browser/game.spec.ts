@@ -16,6 +16,19 @@ async function pause(page: Page) {
     .click();
 }
 async function review(page: Page, title: string) {
+  // Work through the two-item decision queue until the requested priority appears.
+  for (
+    let n = 0;
+    n < 4 &&
+    (await page
+      .locator(".recommendation")
+      .filter({ hasText: title })
+      .count()) === 0;
+    n++
+  ) {
+    await page.locator(".recommendation").first().click();
+    await page.getByRole("dialog").locator(".secondary").click();
+  }
   await page
     .getByRole("button")
     .filter({ has: page.getByText(title, { exact: true }) })
@@ -160,7 +173,7 @@ test("inspectors, speed and reset remain accessible on touch layouts", async ({
     .click();
   await expect(page.getByTestId("store-clock")).toHaveText("09:00:00");
   await expect(page.getByTestId("sales")).toHaveText("€0.00");
-  await expect(page.locator(".recommendation.pending")).toHaveCount(4);
+  await expect(page.locator(".recommendation.pending")).toHaveCount(2);
 });
 test("event drawer supports pause, category filters and history", async ({
   page,
@@ -196,7 +209,7 @@ test("reduced motion preserves useful operations and untimed decisions", async (
   await page
     .getByRole("button", { name: "Prioritize in-store shoppers", exact: true })
     .click();
-  await expect(page.locator(".recommendation.declined")).toHaveCount(1);
+  await expect(page.getByTestId("decision-impact-online")).toBeVisible();
   await expect(
     page.getByText("In-store shoppers prioritized", { exact: true }),
   ).toBeVisible();
@@ -353,4 +366,41 @@ test("live feed filters, visualizes price updates and respects the shared pause 
       .filter({ hasText: "fridge/fresh/temperature" })
       .first(),
   ).toBeVisible({ timeout: 10000 });
+});
+
+test("presents at most two decisions and shows the actual work they cause", async ({
+  page,
+}) => {
+  await openStore(page);
+  await pause(page);
+  await expect(page.locator(".recommendation")).toHaveCount(2);
+  await approve(
+    page,
+    "Protect margin or reduce food waste?",
+    "Favor lower food waste",
+  );
+  await expect(page.locator(".recommendation")).toHaveCount(2);
+  await expect(page.getByTestId("decision-impact-meal")).toContainText(
+    "Bakery prices −20%",
+  );
+  await approve(
+    page,
+    "Service or lower operating costs?",
+    "Invest in customer service",
+  );
+  await expect(page.locator(".recommendation")).toHaveCount(2);
+  await expect(page.getByTestId("decision-impact-checkout")).toContainText(
+    "walking to checkout 3",
+  );
+  await page.getByRole("button", { name: "2×", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Play simulation", exact: true })
+    .click();
+  await expect(page.getByTestId("decision-impact-checkout")).toContainText(
+    "Checkout 3 is open",
+    { timeout: 35000 },
+  );
+  await page.getByRole("button", { name: "Checkouts", exact: true }).click();
+  const inspector = page.locator(".inspector");
+  await expect(inspector.getByText("Open", { exact: true })).toHaveCount(3);
 });

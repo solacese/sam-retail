@@ -2134,3 +2134,186 @@ button:hover:not(:disabled) {
     bottom: 16px;
   }
 }
+
+/* A bigger, open shop floor with a calm, compact decision rail. */
+.scene-caption {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  flex-shrink: 0;
+  align-items: center;
+  padding: 22px 26px 8px;
+  gap: 12px;
+}
+.scene-caption h1 {
+  font-size: 27px;
+  font-weight: 700;
+  margin-top: 5px;
+  letter-spacing: -1px;
+}
+.scene-caption .eyebrow {
+  color: #748165;
+  font-size: 9px;
+}
+.shop-stage {
+  min-height: 735px;
+}
+.canvas-wrap {
+  min-height: 610px;
+}
+.brand small {
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: #5d725d;
+}
+.recommendations {
+  gap: 12px;
+  margin-top: 0;
+}
+.agent-intro {
+  font-size: 12px;
+  line-height: 1.65;
+  color: #7c8871;
+  margin: 12px 0 17px;
+}
+.recommendation {
+  padding: 16px;
+  background: #edf0e2;
+  border-color: #dbe2cc;
+  border-radius: 13px;
+  gap: 10px;
+  transition:
+    background 0.18s,
+    transform 0.18s;
+}
+.recommendation:hover {
+  background: #e5ecd8;
+  transform: translateY(-2px);
+}
+.rec-agent {
+  font-size: 10px;
+}
+.recommendation > strong {
+  font-size: 16px;
+  line-height: 1.4;
+}
+.rec-evidence {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.rec-link {
+  font-size: 12px;
+  padding-top: 5px;
+}
+.store-changes {
+  margin-top: 24px;
+}
+.store-changes .eyebrow {
+  font-size: 9px;
+  letter-spacing: 1.2px;
+}
+.decision-outcome {
+  display: flex;
+  align-items: start;
+  gap: 9px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+}
+.decision-outcome > svg {
+  color: #6d9565;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.decision-outcome strong {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.decision-outcome p {
+  font-size: 11px;
+  line-height: 1.65;
+  color: #7c8871;
+  margin-top: 5px;
+}
+@media (min-width: 1121px) {
+  .workspace {
+    grid-template-columns: 218px minmax(0, 1fr) 290px;
+  }
+  .store-sidebar {
+    padding: 25px 18px 0;
+  }
+}
+@media (min-width: 1600px) {
+  .workspace {
+    grid-template-columns: 240px minmax(0, 1fr) 310px;
+  }
+}
+@media (min-width: 761px) and (max-width: 1120px) {
+  .shop-stage {
+    height: 690px;
+    min-height: 0;
+  }
+  .canvas-wrap {
+    min-height: 0;
+  }
+  .scene-caption {
+    padding: 20px 20px 8px;
+  }
+  .scene-caption h1 {
+    font-size: 23px;
+  }
+}
+@media (max-width: 760px) {
+  .shop-stage {
+    height: 500px;
+    min-height: 0;
+  }
+  .canvas-wrap {
+    min-height: 0;
+  }
+  .scene-caption {
+    padding: 19px 16px 0;
+  }
+  .scene-caption h1 {
+    font-size: 23px;
+    max-width: none;
+  }
+  .scene-caption .eyebrow {
+    font-size: 8px;
+    letter-spacing: 1.15px;
+  }
+  .brand small {
+    font-size: 9px;
+  }
+  .recommendation {
+    padding: 16px 13px;
+  }
+  .recommendation > strong {
+    font-size: 16px;
+    line-height: 1.45;
+  }
+  .rec-evidence {
+    font-size: 12px;
+  }
+  .rec-link {
+    font-size: 12px;
+  }
+  .store-changes {
+    margin-top: 23px;
+  }
+  .decision-outcome strong {
+    font-size: 14px;
+  }
+  .decision-outcome p {
+    font-size: 13px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .recommendation {
+    transition: none;
+  }
+  .recommendation:hover {
+    transform: none;
+  }
+}

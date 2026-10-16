@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import {
   DEPARTMENTS,
+  visibleRecommendations,
+  decisionImpact,
   evidence,
   metrics,
   stock,
@@ -273,7 +275,8 @@ export default function App() {
       !!decision || panel === "europe" || panel === "help" || panel === "reset",
     ),
     s = sim.snapshot,
-    m = metrics(s);
+    m = metrics(s),
+    priorities = visibleRecommendations(s);
   const rec = s.recommendations.find((r) => r.id === decision);
   useEffect(() => {
     if (!notice) return;
@@ -408,7 +411,7 @@ export default function App() {
         <section className="shop-stage" aria-label="Paris Flagship shop floor">
           <div className="scene-caption">
             <div>
-              <span className="eyebrow">THE SHOP FLOOR</span>
+              <span className="eyebrow">ABC SHOP · THE SHOP FLOOR</span>
               <h1>Paris Flagship</h1>
             </div>
             <span className="live-badge">
@@ -498,15 +501,16 @@ export default function App() {
               <div className="section-heading">
                 <span className="eyebrow">YOUR AGENT TEAM</span>
                 <span className="count-pill">
-                  {
-                    s.recommendations.filter((r) => r.status === "pending")
-                      .length
-                  }{" "}
-                  to review
+                  {priorities.length} to review
                 </span>
               </div>
+              <p className="agent-intro">
+                {priorities.length
+                  ? "You set the priorities. Your team handles the details."
+                  : "All priorities set. Your team is on it."}
+              </p>
               <div className="recommendations">
-                {s.recommendations.map((r) => (
+                {priorities.map((r) => (
                   <button
                     key={r.id}
                     className={`recommendation ${r.status}`}
@@ -533,6 +537,32 @@ export default function App() {
                 ))}
               </div>
             </>
+          )}
+          {s.decisionLog.length > 0 && (
+            <section
+              className="store-changes"
+              aria-label="Your choices in action"
+            >
+              <div className="section-heading">
+                <span className="eyebrow">YOUR CHOICES IN ACTION</span>
+              </div>
+              {[...s.decisionLog]
+                .reverse()
+                .slice(0, 2)
+                .map((choice) => (
+                  <article
+                    className="decision-outcome"
+                    data-testid={`decision-impact-${choice.id}`}
+                    key={choice.id}
+                  >
+                    <Check size={15} />
+                    <div>
+                      <strong>{actionStatus(s, choice.id)}</strong>
+                      <p>{decisionImpact(s, choice.id)}</p>
+                    </div>
+                  </article>
+                ))}
+            </section>
           )}
           <section className="department-list">
             <div className="section-heading">
@@ -621,8 +651,8 @@ export default function App() {
                 if (sim.choose(rec.id, true)) {
                   setNotice(
                     rec.id === "meal"
-                      ? "Waste reduction policy is active. All prices are in sync."
-                      : "Priority set. Your agents will coordinate the store work.",
+                      ? "Bakery deal is live. All prices are in sync."
+                      : decisionImpact(sim.store.current, rec.id),
                   );
                   setDecision(null);
                 } else setNotice("That priority has already been set.");
@@ -635,9 +665,7 @@ export default function App() {
               className="secondary"
               onClick={() => {
                 sim.choose(rec.id, false);
-                setNotice(
-                  "Priority set. Your agents will follow this approach.",
-                );
+                setNotice(decisionImpact(sim.store.current, rec.id));
                 setDecision(null);
               }}
             >

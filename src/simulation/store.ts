@@ -1,12 +1,7 @@
 /** One deterministic source of truth for the store, scene and event stream. */
 export type Point = [number, number];
 export type Category =
-  | "inventory"
-  | "pricing"
-  | "purchases"
-  | "iot"
-  | "agents"
-  | "operations";
+  "inventory" | "pricing" | "purchases" | "iot" | "agents" | "operations";
 export type DecisionKind = "restock" | "checkout" | "meal" | "online";
 export interface Department {
   id: string;
@@ -20,42 +15,42 @@ export const DEPARTMENTS: Department[] = [
     id: "produce",
     name: "Fruit & veg",
     color: "#82a45b",
-    position: [-10, -5],
+    position: [-12, -6],
     kind: "produce",
   },
   {
     id: "bakery",
     name: "Bakery",
     color: "#d4a265",
-    position: [0, -5],
+    position: [0, -6],
     kind: "bakery",
   },
   {
     id: "fresh",
     name: "Fresh & chilled",
     color: "#7dabb2",
-    position: [10, -5],
+    position: [12, -6],
     kind: "fridge",
   },
   {
     id: "pantry",
     name: "Pantry",
     color: "#d28b6c",
-    position: [-10, 2],
+    position: [-12, 3],
     kind: "shelf",
   },
   {
     id: "drinks",
     name: "Drinks",
     color: "#a594b8",
-    position: [0, 2],
+    position: [0, 3],
     kind: "shelf",
   },
   {
     id: "home",
     name: "Home & care",
     color: "#89aaa0",
-    position: [10, 2],
+    position: [12, 3],
     kind: "shelf",
   },
 ];
@@ -162,6 +157,7 @@ export interface StoreState {
   transactions: Transaction[];
   events: StoreEvent[];
   recommendations: Recommendation[];
+  decisionLog: { id: DecisionKind; accepted: boolean; at: number }[];
   checkouts: boolean[];
   mealActive: boolean;
   onlineComplete: number;
@@ -206,13 +202,15 @@ const GOODS = [
 export const SHOPPER_COUNT = 12;
 export const STAFF_COUNT = 6;
 export const PERSON_SPACING = 1.14;
-export const ENTRY: Point = [12, 14];
-export const STOCKROOM: Point = [8, -10];
-export const PICKUP: Point = [14, 8];
+export const FLOOR = { width: 42, depth: 36 };
+export const FIXTURE_WIDTH = 8;
+export const ENTRY: Point = [17, 17];
+export const STOCKROOM: Point = [9, -13];
+export const PICKUP: Point = [17, 9];
 export const TILLS: Point[] = [
-  [-10, 8],
-  [-3, 8],
-  [4, 8],
+  [-12, 10],
+  [-3, 10],
+  [6, 10],
 ];
 const outfits = [
   "#b76e56",
@@ -242,14 +240,50 @@ export function stock(s: StoreState, id: string) {
       { shelf: 0, backroom: 0, receiving: 0, waste: 0 },
     );
 }
+const OBSTACLES = [
+  ...DEPARTMENTS.map((d) => [
+    d.position[0],
+    d.position[1],
+    FIXTURE_WIDTH / 2 + 0.3,
+    1.3,
+  ]),
+  ...TILLS.map((t) => [t[0], t[1], 1.6, 1.25]),
+  [PICKUP[0], PICKUP[1] - 1.8, 2.05, 1.4],
+  ...[5, 8.5, 12, 15.5].map((x) => [x, -14.8, 1.35, 1]),
+  ...[-16, -13.4, -10.8].map((x) => [x, -14.8, 1.1, 1.05]),
+];
 function blocked(x: number, z: number) {
-  if (x < -15 || x > 15 || z < -12 || z > 14) return true;
   return (
-    DEPARTMENTS.some(
-      (d) =>
-        Math.abs(x - d.position[0]) < 3.8 && Math.abs(z - d.position[1]) < 1.3,
-    ) || TILLS.some((t) => Math.abs(x - t[0]) < 1.2 && Math.abs(z - t[1]) < 0.6)
+    x < -19.5 ||
+    x > 19.5 ||
+    z < -16 ||
+    z > 17.5 ||
+    OBSTACLES.some(
+      ([cx, cz, hx, hz]) => Math.abs(x - cx) < hx && Math.abs(z - cz) < hz,
+    )
   );
+}
+/** Continuous segment/rectangle clipping also catches very shallow corner cuts. */
+function crossesFixture(start: Point, end: Point) {
+  return OBSTACLES.some(([cx, cz, hx, hz]) => {
+    let enter = 0,
+      leave = 1;
+    for (const [from, delta, min, max] of [
+      [start[0], end[0] - start[0], cx - hx + 1e-8, cx + hx - 1e-8],
+      [start[1], end[1] - start[1], cz - hz + 1e-8, cz + hz - 1e-8],
+    ]) {
+      if (Math.abs(delta) < 1e-10) {
+        if (from < min || from > max) return false;
+      } else {
+        const a = (min - from) / delta,
+          b = (max - from) / delta;
+        enter = Math.max(enter, Math.min(a, b));
+        leave = Math.min(leave, Math.max(a, b));
+        if (enter >= leave) return false;
+      }
+    }
+    return enter < leave;
+  });
 }
 /** Routes avoid fixture footprints and occupied space, with half-metre lanes. */
 export function routeBetween(
@@ -259,6 +293,24 @@ export function routeBetween(
 ): Point[] {
   const from: Point = [Math.round(start[0] * 2), Math.round(start[1] * 2)],
     to: Point = [Math.round(end[0] * 2), Math.round(end[1] * 2)];
+  if (
+    blocked(from[0] / 2, from[1] / 2) ||
+    crossesFixture(start, [from[0] / 2, from[1] / 2])
+  ) {
+    const lanes: Point[] = [];
+    for (let x = from[0] - 2; x <= from[0] + 2; x++)
+      for (let z = from[1] - 2; z <= from[1] + 2; z++)
+        if (!blocked(x / 2, z / 2) && !crossesFixture(start, [x / 2, z / 2]))
+          lanes.push([x, z]);
+    lanes.sort(
+      (a, b) =>
+        Math.hypot(a[0] / 2 - start[0], a[1] / 2 - start[1]) -
+        Math.hypot(b[0] / 2 - start[0], b[1] / 2 - start[1]),
+    );
+    if (!lanes.length) return [];
+    from[0] = lanes[0][0];
+    from[1] = lanes[0][1];
+  }
   const key = (p: Point) => `${p[0]},${p[1]}`;
   const taken = new Set<string>();
   for (const point of occupied)
@@ -310,9 +362,10 @@ export function routeBetween(
         path.unshift([current[0] / 2, current[1] / 2]);
         current = parents.get(key(current)) ?? null;
       }
-      path.shift();
+      if (Math.hypot(path[0][0] - start[0], path[0][1] - start[1]) < 1e-6)
+        path.shift();
       path.push([...end]);
-      return path;
+      return smoothRoute(start, path, occupied);
     }
     for (const [x, z] of directions) {
       const next: Point = [point[0] + x, point[1] + z],
@@ -330,6 +383,29 @@ export function routeBetween(
     }
   }
   return [];
+}
+/** Long, clean walking segments replace the little half-metre grid turns. */
+function smoothRoute(start: Point, path: Point[], occupied: Point[]) {
+  const result: Point[] = [];
+  let from = start,
+    cursor = 0;
+  while (cursor < path.length) {
+    let last = cursor;
+    for (let end = cursor; end < path.length; end++) {
+      const target = path[end];
+      const clear =
+        !crossesFixture(from, target) &&
+        occupied.every(
+          (p) => segmentDistance(p, from, target) >= PERSON_SPACING + 0.04,
+        );
+      if (!clear) break;
+      last = end;
+    }
+    result.push(path[last]);
+    from = path[last];
+    cursor = last + 1;
+  }
+  return result;
 }
 function otherPeople(s: StoreState, p: Person) {
   return s.people.filter(
@@ -402,6 +478,7 @@ function segmentDistance(point: Point, start: Point, end: Point) {
 function clearStep(s: StoreState, p: Person, end: Point) {
   return (
     !blocked(...end) &&
+    !crossesFixture(p.position, end) &&
     otherPeople(s, p).every(
       (other) =>
         segmentDistance(other.position, p.position, end) >=
@@ -438,7 +515,7 @@ export function createStore(seed = 2401): StoreState {
       color: g[3],
       shape: g[4],
       department: d.id,
-      position: [d.position[0] + ((i % 4) - 1.5) * 1.6, d.position[1] + 2],
+      position: [d.position[0] + ((i % 4) - 1.5) * 1.8, d.position[1] + 2],
     };
   });
   const s: StoreState = {
@@ -482,6 +559,7 @@ export function createStore(seed = 2401): StoreState {
     tasks: [],
     transactions: [],
     events: [],
+    decisionLog: [],
     recommendations: [
       {
         id: "restock",
@@ -566,18 +644,18 @@ export function createStore(seed = 2401): StoreState {
       outfit: outfits[i % outfits.length],
       skin: skins[i % skins.length],
     };
-    p.list = Array.from(
-      { length: 3 },
-      (_, n) => products[(i * 7 + n * 5) % 24].id,
-    );
+    p.list = shoppingList(s, i);
     if (i < 8) {
-      const product = products[(i * 7) % 24];
-      p.position = [product.position[0] + (i % 2) * 0.3, product.position[1]];
+      const product = products.find((product) => product.id === p.list[0])!;
+      p.position = [
+        product.position[0],
+        product.position[1] + (i >= 6 ? 1.5 : 0),
+      ];
       p.stage = "picking";
       p.timer = 0.7 + (i % 4);
     }
     if (i >= 8 && i < 10) {
-      p.position = [TILLS[i % 2][0] + 1.8, 10 + (i % 3) * 0.6];
+      p.position = [TILLS[i % 2][0] + 1.8, TILLS[i % 2][1] + 2 + (i % 3) * 0.6];
       for (const productId of p.list.slice(0, 2))
         p.basket.push(...take(s, productId, 1, "shelf", "inBaskets"));
       p.visited = p.list.length;
@@ -590,7 +668,8 @@ export function createStore(seed = 2401): StoreState {
     s.people.push({
       id: 100 + i,
       role: "employee",
-      position: i < 2 ? [TILLS[i][0], 6.5] : [-13 + (i - 2) * 8, -9],
+      position:
+        i < 2 ? [TILLS[i][0], TILLS[i][1] - 1.5] : [-15 + (i - 2) * 10, -11],
       route: [],
       destination: null,
       moving: false,
@@ -644,7 +723,7 @@ export function createStore(seed = 2401): StoreState {
     s,
     "agents",
     "agent/recommendation/created",
-    "Four recommendations are ready for your review.",
+    "Two priorities at a time. Your agents handle the details.",
   );
   return s;
 }
@@ -657,7 +736,7 @@ function move(s: StoreState, p: Person, dt: number) {
       p.destination!,
       otherPeople(s, p).map((p) => p.position),
     );
-  let budget = dt * (p.role === "employee" ? 1.65 : 1.25 + (p.id % 4) * 0.07);
+  let budget = dt * (p.role === "employee" ? 1.95 : 1.5 + (p.id % 4) * 0.07);
   while (p.route.length && budget > 0) {
     const next = p.route[0],
       dx = next[0] - p.position[0],
@@ -796,6 +875,27 @@ function joinQueue(s: StoreState, p: Person) {
   p.destination = null;
   p.queueSince = s.time;
 }
+function shoppingList(s: StoreState, id: number) {
+  const trip = Math.floor(s.time / 60),
+    start = (id + trip) % 6;
+  const order = [0, 3, 1, 4, 2, 5];
+  const count = id % 3 === 0 ? 6 : 4;
+  const list = Array.from({ length: count }, (_, n) => {
+    const department = order[(start + n) % 6];
+    return s.products[
+      department * 4 + ((Math.floor(id / 6) * 2 + id + n + trip) % 4)
+    ].id;
+  });
+  if (s.mealActive && random(s) < 0.7) list[0] = s.products[4 + (id % 4)].id;
+  return list;
+}
+export function visibleRecommendations(s: StoreState) {
+  const order: DecisionKind[] = ["restock", "meal", "checkout", "online"];
+  return order
+    .map((id) => s.recommendations.find((r) => r.id === id)!)
+    .filter((r) => r.status === "pending")
+    .slice(0, 2);
+}
 function shopNext(s: StoreState, p: Person) {
   if (p.visited >= p.list.length) {
     joinQueue(s, p);
@@ -809,6 +909,7 @@ export function decide(s: StoreState, id: DecisionKind, accept: boolean) {
   const rec = s.recommendations.find((r) => r.id === id)!;
   if (rec.status !== "pending") return false;
   rec.status = accept ? "applied" : "declined";
+  s.decisionLog.push({ id, accepted: accept, at: s.time });
   if (id === "restock") s.inventoryPolicy = accept ? "availability" : "lean";
   if (id === "checkout") s.servicePolicy = accept ? "service" : "cost";
   if (id === "online") s.fulfilmentPolicy = accept ? "online" : "instore";
@@ -842,6 +943,32 @@ export function decide(s: StoreState, id: DecisionKind, accept: boolean) {
           ? "checkouts"
           : "pickup",
   );
+  if (id === "meal" && accept) {
+    // A live bakery promotion changes actual shopping routes, never stock or revenue by fiat.
+    const interested = s.people
+      .filter(
+        (p) =>
+          p.role === "shopper" &&
+          (p.stage === "shopping" || p.stage === "picking"),
+      )
+      .sort(
+        (a, b) =>
+          Math.hypot(a.position[0], a.position[1] + 4) -
+          Math.hypot(b.position[0], b.position[1] + 4),
+      )
+      .slice(0, 2);
+    interested.forEach((p, i) => {
+      p.list.splice(p.visited, 0, s.products[4 + i].id);
+      shopNext(s, p);
+    });
+    emit(
+      s,
+      "operations",
+      "promotion/bakery/engaged",
+      `${interested.length} shoppers are heading to the bakery deal.`,
+      "bakery",
+    );
+  }
   dispatchWork(s);
   return true;
 }
@@ -873,7 +1000,7 @@ function assignTask(
     kind === "restock"
       ? STOCKROOM
       : kind === "checkout"
-        ? [4, 6.5]
+        ? [TILLS[2][0], TILLS[2][1] - 1.5]
         : s.products.find((p) => p.id === productId)!.position,
   );
   return true;
@@ -1081,15 +1208,7 @@ export function advance(s: StoreState, dt: number) {
       p.position = [...ENTRY];
       p.destination = null;
       p.visited = 0;
-      p.list = Array.from(
-        { length: 3 },
-        (_, n) =>
-          s.products[
-            s.mealActive && n === 0 && random(s) < 0.6
-              ? 4 + Math.floor(random(s) * 4)
-              : Math.floor(random(s) * 24)
-          ].id,
-      );
+      p.list = shoppingList(s, p.id);
       p.stage = "entering";
       p.timer = 0.5;
       emit(
@@ -1109,7 +1228,7 @@ export function advance(s: StoreState, dt: number) {
     queue.forEach((p, n) => {
       const target: Point = [
         TILLS[i][0] + 1.8 + (n >= 4 ? 1.3 : 0),
-        9.6 + Math.min(n, 7 - n) * 1.16,
+        TILLS[i][1] + 1.6 + Math.min(n, 7 - n) * 1.16,
       ];
       if (
         !p.destination ||
@@ -1127,7 +1246,7 @@ export function advance(s: StoreState, dt: number) {
       if (s.queueSamples.length > 100) s.queueSamples.shift();
       queue[0].stage = "paying";
       queue[0].timer = 4;
-      go(s, queue[0], [TILLS[i][0] + 1.8, 8.3], true);
+      go(s, queue[0], [TILLS[i][0] + 1.8, TILLS[i][1] + 0.3], true);
       emit(
         s,
         "operations",
@@ -1274,4 +1393,36 @@ export function evidence(s: StoreState, id: DecisionKind) {
     return `${batches.reduce((n, b) => n + b.shelf, 0)} bakery items on shelves · ${Number.isFinite(earliest) ? `first expiry in ${Math.max(0, Math.ceil((earliest - s.time) / 60))} min` : "shelf awaiting replenishment"}.`;
   }
   return `${s.onlineComplete ? "Collection promise met" : "An online order is waiting"} · ${metrics(s).queue} shoppers waiting in store.`;
+}
+
+/** Human-readable progress comes from completed physical work, not a second animation timer. */
+export function decisionImpact(s: StoreState, id: DecisionKind) {
+  const choice = s.decisionLog.find((d) => d.id === id);
+  if (!choice) return "";
+  if (id === "meal")
+    return choice.accepted
+      ? "Bakery prices −20%. Shoppers are visiting the deal."
+      : "Bakery stays at full price. More margin per item, with expiry risk.";
+  if (id === "checkout")
+    return choice.accepted
+      ? s.checkouts[2]
+        ? "Checkout 3 is open. Shoppers can use the extra lane."
+        : "A colleague is walking to checkout 3 to open it."
+      : "Two checkouts stay open. The extra staffing budget is saved.";
+  if (id === "online")
+    return choice.accepted
+      ? s.onlineComplete
+        ? "The collection order is packed, paid and on the counter."
+        : "A colleague is picking four items for the collection point."
+      : "Floor colleagues stay with in-store shoppers and shelf work.";
+  if (!choice.accepted)
+    return "Smaller shelf buffers. Colleagues refill only when stock gets low.";
+  const task = s.tasks.find((t) => t.kind === "restock");
+  if (!task)
+    return "Larger shelf buffers are active. Agents refill departments as stock dips.";
+  return task?.stage === "complete"
+    ? "The first shelf is refilled. Agents keep the larger stock buffer."
+    : task?.stage === "destination"
+      ? "A colleague is carrying stock from the backroom to the shelf."
+      : "A colleague is heading to the stockroom for more shelf stock.";
 }

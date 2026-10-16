@@ -9,13 +9,17 @@ import {
   type ReactNode,
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { Billboard, OrbitControls } from "@react-three/drei";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import * as THREE from "three";
 import type { OrbitControls as Controls } from "three-stdlib";
 import {
   DEPARTMENTS,
   TILLS,
+  ENTRY,
+  PICKUP,
+  FLOOR,
+  FIXTURE_WIDTH,
   stock,
   type StoreState,
 } from "../simulation/store";
@@ -85,6 +89,7 @@ function Sign({
   color = GREEN,
   background = CREAM,
   small = false,
+  flat = false,
 }: {
   text: string;
   at: [number, number, number];
@@ -92,6 +97,7 @@ function Sign({
   color?: string;
   background?: string;
   small?: boolean;
+  flat?: boolean;
 }) {
   const texture = useMemo(() => {
     const canvas = document.createElement("canvas");
@@ -111,7 +117,7 @@ function Sign({
   }, [text, color, background, small]);
   useEffect(() => () => texture.dispose(), [texture]);
   return (
-    <mesh position={at}>
+    <mesh position={at} rotation={flat ? [-Math.PI / 2, 0, 0] : [0, 0, 0]}>
       <planeGeometry args={[width, (width * (small ? 128 : 180)) / 768]} />
       <meshBasicMaterial
         map={texture}
@@ -119,6 +125,140 @@ function Sign({
         toneMapped={false}
       />
     </mesh>
+  );
+}
+function DealFlag({
+  at,
+  store,
+}: {
+  at: [number, number, number];
+  store: StoreState;
+}) {
+  const flag = useRef<THREE.Group>(null!);
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  useFrame(() => {
+    if (flag.current)
+      flag.current.rotation.z = reduced
+        ? 0
+        : Math.sin(store.time * 2.2) * 0.045;
+  });
+  return (
+    <group position={at} ref={flag}>
+      <Sign
+        text="FRESH DEAL −20%"
+        at={[0, 0, 0]}
+        width={4.6}
+        color="#7d4531"
+        background="#f2cf96"
+      />
+      <Box at={[-1.9, -0.7, 0]} size={[0.07, 1.4, 0.07]} color={WOOD} />
+      <Box at={[1.9, -0.7, 0]} size={[0.07, 1.4, 0.07]} color={WOOD} />
+    </group>
+  );
+}
+function Entrance({
+  store,
+  running,
+  reduced,
+}: {
+  store: MutableRefObject<StoreState>;
+  running: MutableRefObject<boolean>;
+  reduced: boolean;
+}) {
+  const left = useRef<THREE.Group>(null!),
+    right = useRef<THREE.Group>(null!);
+  useFrame((_, dt) => {
+    if (!running.current) return;
+    const nearby = store.current.people.some(
+      (p) =>
+        p.stage !== "outside" &&
+        Math.hypot(p.position[0] - ENTRY[0], p.position[1] - ENTRY[1]) < 4.5,
+    );
+    const target = nearby ? 1.85 : 0.67,
+      amount = reduced ? 1 : 1 - Math.exp(-dt * 7);
+    left.current.position.x = THREE.MathUtils.lerp(
+      left.current.position.x,
+      -target,
+      amount,
+    );
+    right.current.position.x = THREE.MathUtils.lerp(
+      right.current.position.x,
+      target,
+      amount,
+    );
+  });
+  return (
+    <group position={[ENTRY[0], 0, ENTRY[1] - 0.5]}>
+      <Box at={[0, 0.07, -0.4]} size={[5.8, 0.04, 2.3]} color="#8da17e" />
+      <Sign
+        text="HELLO, NEIGHBOUR"
+        at={[0, 0.12, -0.55]}
+        width={4.4}
+        flat
+        background="#8da17e"
+        color="#eef0dc"
+      />
+      {[-2.6, 2.6].map((x) => (
+        <SoftBox
+          key={x}
+          at={[x, 1.18, 0]}
+          size={[0.14, 2.36, 0.17]}
+          color={GREEN}
+        />
+      ))}
+      <SoftBox at={[0, 2.4, 0]} size={[5.4, 0.16, 0.2]} color={GREEN} />
+      {[left, right].map((ref, i) => (
+        <group ref={ref} key={i} position={[i ? 0.67 : -0.67, 1.2, 0]}>
+          <mesh>
+            <boxGeometry args={[1.3, 2.1, 0.04]} />
+            <meshStandardMaterial
+              color="#b2d2c9"
+              transparent
+              opacity={0.2}
+              roughness={0.3}
+            />
+          </mesh>
+          <Box at={[0, 0, 0.04]} size={[1.3, 0.09, 0.04]} color="#dce4d1" />
+        </group>
+      ))}
+    </group>
+  );
+}
+function CheckoutBelt({
+  index,
+  store,
+  running,
+}: {
+  index: number;
+  store: MutableRefObject<StoreState>;
+  running: MutableRefObject<boolean>;
+}) {
+  const belt = useRef<THREE.Group>(null!);
+  const payer = store.current.people.find(
+    (p) => p.stage === "paying" && p.checkout === index,
+  );
+  useFrame(() => {
+    if (!running.current || !belt.current) return;
+    const person = store.current.people.find(
+      (p) => p.stage === "paying" && p.checkout === index,
+    );
+    belt.current.position.z = person
+      ? -0.35 + (Math.max(0, person.timer) / 4) * 0.7
+      : 0;
+  });
+  return (
+    <group ref={belt} position={[0.45, 1.6, 0]}>
+      {payer?.basket.slice(0, 2).map((line, i) => (
+        <SoftBox
+          key={line.batchId}
+          at={[0, 0.02, i * 0.37]}
+          size={[0.28, 0.27, 0.27]}
+          color={
+            store.current.products.find((p) => p.id === line.productId)!.color
+          }
+        />
+      ))}
+    </group>
   );
 }
 function ProductStock({ state }: { state: StoreState }) {
@@ -200,7 +340,9 @@ function DepartmentFixture({
     kind,
   } = department;
   const flash = state.events.find(
-    (e) => e.target === department.id && state.time - e.at < 1.2,
+    (e) =>
+      e.target === department.id &&
+      state.time - e.at < (e.topic.includes("/strategy/") ? 8 : 1.2),
   );
   return (
     <group
@@ -211,12 +353,12 @@ function DepartmentFixture({
     >
       <SoftBox
         at={[x, 0.21, z]}
-        size={[7, 0.42, 2]}
+        size={[FIXTURE_WIDTH, 0.42, 2]}
         color={selected ? "#7bad92" : WOOD}
       />
       <Box
         at={[x, kind === "produce" ? 0.8 : 1.35, z - 0.72]}
-        size={[6.9, kind === "produce" ? 1.2 : 2.3, 0.15]}
+        size={[FIXTURE_WIDTH - 0.1, kind === "produce" ? 1.2 : 2.3, 0.15]}
         color={kind === "fridge" ? "#bdd1cc" : "#d9c4a2"}
       />
       {(kind === "produce" ? [0.42, 0.94] : [0.42, 0.94, 1.45, 1.96]).map(
@@ -224,12 +366,12 @@ function DepartmentFixture({
           <Box
             key={y}
             at={[x, y, z]}
-            size={[6.9, 0.09, 1.7]}
+            size={[FIXTURE_WIDTH - 0.1, 0.09, 1.7]}
             color={kind === "fridge" ? "#e0e8dc" : CREAM}
           />
         ),
       )}
-      {[-3.45, 3.45].map((a) => (
+      {[-3.95, 3.95].map((a) => (
         <Box
           key={a}
           at={[x + a, kind === "produce" ? 0.8 : 1.4, z]}
@@ -238,7 +380,7 @@ function DepartmentFixture({
         />
       ))}
       {kind === "produce" &&
-        [-3.45, 3.45].map((a) => (
+        [-3.95, 3.95].map((a) => (
           <Box
             key={`sign-post-${a}`}
             at={[x + a, 1.9, z - 0.65]}
@@ -246,11 +388,15 @@ function DepartmentFixture({
             color={WOOD}
           />
         ))}
-      <SoftBox at={[x, 2.7, z - 0.65]} size={[7.1, 0.48, 0.25]} color={GREEN} />
+      <SoftBox
+        at={[x, 2.7, z - 0.65]}
+        size={[FIXTURE_WIDTH + 0.1, 0.48, 0.25]}
+        color={GREEN}
+      />
       <Sign
         text={department.name.toUpperCase()}
         at={[x, 2.72, z - 0.5]}
-        width={5.6}
+        width={6.8}
         color={CREAM}
         background={GREEN}
         small
@@ -262,7 +408,7 @@ function DepartmentFixture({
             key={p.id}
             text={`${p.name}  €${(p.price / 100).toFixed(2)}`}
             at={[p.position[0], 0.45, z + 0.92]}
-            width={1.48}
+            width={1.65}
             small
             color={
               state.mealActive && department.id === "bakery" ? "#a15b3c" : GREEN
@@ -310,7 +456,11 @@ function DepartmentFixture({
                 />
               </group>
             ))}
-          <Box at={[x, 2.3, z]} size={[6.9, 0.08, 1.7]} color="#cae6df" />
+          <Box
+            at={[x, 2.3, z]}
+            size={[FIXTURE_WIDTH - 0.1, 0.08, 1.7]}
+            color="#cae6df"
+          />
           <Sign
             text={`${state.fridge.toFixed(1)}°C`}
             at={[x + 2.8, 2.73, z - 0.48]}
@@ -321,17 +471,11 @@ function DepartmentFixture({
         </>
       )}
       {state.mealActive && department.id === "bakery" && (
-        <Sign
-          text="FRESH DEAL −20%"
-          at={[x, 3.25, z]}
-          width={3.6}
-          color="#7d4531"
-          background="#f2cf96"
-        />
+        <DealFlag at={[x, 3.6, z]} store={state} />
       )}
       {(selected || flash) && (
         <mesh position={[x, 0.025, z]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[7.5, 2.6]} />
+          <planeGeometry args={[FIXTURE_WIDTH + 0.5, 2.6]} />
           <meshBasicMaterial
             color={selected ? "#b2ccb7" : "#f1d996"}
             transparent
@@ -494,7 +638,19 @@ function Human({
     legB = useRef<THREE.Group>(null!),
     arm = useRef<THREE.Group>(null!),
     rightArm = useRef<THREE.Group>(null!),
-    head = useRef<THREE.Group>(null!);
+    head = useRef<THREE.Group>(null!),
+    body = useRef<THREE.Group>(null!),
+    cargoBox = useRef<THREE.Group>(null!),
+    pickedItem = useRef<THREE.Group>(null!),
+    eyes = useRef<THREE.Group>(null!),
+    basketRef = useRef<THREE.Group>(null!);
+  const initialPosition = useRef<[number, number, number]>([
+    person.position[0],
+    0,
+    person.position[1],
+  ]);
+  const stride = useRef(id),
+    lastTime = useRef(store.current.time);
   const angle = useRef(0),
     previous = useRef(
       new THREE.Vector3(
@@ -512,6 +668,11 @@ function Human({
     const p = store.current.people.find((p) => p.id === id)!;
     if (!root.current) return;
     root.current.visible = p.stage !== "outside";
+    if (store.current.time < lastTime.current) {
+      root.current.position.set(p.position[0], 0, p.position[1]);
+      previous.current.copy(root.current.position);
+    }
+    lastTime.current = store.current.time;
     if (!running.current) return;
     const target = new THREE.Vector3(p.position[0], 0, p.position[1]);
     const factor = 1 - Math.exp(-Math.min(dt, 0.1) * 16);
@@ -529,131 +690,228 @@ function Human({
         Math.sin(angle.current - root.current.rotation.y),
         Math.cos(angle.current - root.current.rotation.y),
       ) * Math.min(dt * 12, 1);
-    previous.current.copy(target);
-    const phase = store.current.time * 9 + id,
+    const distance = root.current.position.distanceTo(previous.current);
+    const phase = (stride.current += walking
+        ? Math.min(distance, 0.3) * 5.6
+        : 0),
+      idlePhase = store.current.time * 2 + id,
       gesture = !reduced;
+    previous.current.copy(root.current.position);
     legA.current.rotation.x = gesture && walking ? Math.sin(phase) * 0.38 : 0;
     legB.current.rotation.x = -legA.current.rotation.x;
     arm.current.rotation.x = gesture
       ? p.stage === "picking"
-        ? -1.1 + Math.sin(phase) * 0.12
+        ? -1.1 + Math.sin(idlePhase * 3) * 0.12
         : p.stage === "paying"
           ? -0.8
           : walking
             ? Math.sin(phase) * 0.2
             : p.role === "employee"
-              ? -0.65 + Math.sin(phase * 0.4) * 0.3
-              : Math.sin(phase * 0.2) * 0.06
+              ? -0.65 + Math.sin(idlePhase) * 0.3
+              : Math.sin(idlePhase * 0.6) * 0.06
       : 0;
     rightArm.current.rotation.x = carrying
       ? -0.9
       : gesture && p.role === "employee" && !walking
-        ? -0.5 + Math.sin(phase * 0.4 + 1) * 0.2
+        ? -0.5 + Math.sin(idlePhase + 1) * 0.2
         : 0;
     head.current.position.y =
-      1.39 + (gesture && !walking ? Math.sin(phase * 0.2) * 0.013 : 0);
-    head.current.rotation.z = gesture && p.stage === "picking" ? -0.15 : 0;
+      1.39 + (gesture && !walking ? Math.sin(idlePhase * 0.6) * 0.013 : 0);
+    head.current.rotation.z =
+      gesture && p.stage === "picking" ? -0.12 + Math.sin(idlePhase) * 0.07 : 0;
+    head.current.rotation.y =
+      gesture && p.stage === "queueing" ? Math.sin(idlePhase * 0.5) * 0.16 : 0;
+    eyes.current.scale.y =
+      gesture && (store.current.time + id * 0.47) % 4.8 < 0.13 ? 0.12 : 1;
+    if (p.stage === "leaving" && gesture)
+      rightArm.current.rotation.z = -1.8 + Math.sin(idlePhase * 4) * 0.2;
+    else rightArm.current.rotation.z = 0;
+    body.current.rotation.z = gesture && walking ? Math.sin(phase) * 0.025 : 0;
+    if (basketRef.current)
+      basketRef.current.rotation.z =
+        gesture && walking ? Math.sin(phase + 1) * 0.05 : 0;
+    if (cargoBox.current)
+      cargoBox.current.rotation.z =
+        gesture && walking ? Math.sin(phase) * 0.045 : 0;
+    pickedItem.current.visible =
+      gesture && p.stage === "picking" && p.timer < 0.9;
+    pickedItem.current.position.y =
+      1.1 +
+      (p.stage === "picking"
+        ? Math.sin(Math.min(1, (0.9 - p.timer) / 0.9) * Math.PI) * 0.2
+        : 0);
     root.current.position.y =
       gesture && walking ? Math.abs(Math.sin(phase)) * 0.025 : 0;
   });
   const employee = person.role === "employee";
   return (
-    <group ref={root} position={[person.position[0], 0, person.position[1]]}>
-      <group ref={legA} position={[-0.13, 0.44, 0]}>
-        <SoftBox at={[0, -0.16, 0]} size={[0.18, 0.43, 0.2]} color="#394b50" />
-        <Box at={[0, -0.37, 0.05]} size={[0.2, 0.12, 0.32]} color="#f2e9d3" />
-      </group>
-      <group ref={legB} position={[0.13, 0.44, 0]}>
-        <SoftBox at={[0, -0.16, 0]} size={[0.18, 0.43, 0.2]} color="#394b50" />
-        <Box at={[0, -0.37, 0.05]} size={[0.2, 0.12, 0.32]} color="#f2e9d3" />
-      </group>
-      <SoftBox
-        at={[0, 0.83, 0]}
-        size={[0.56, 0.66, 0.35]}
-        color={person.outfit}
-      />
-      {employee && (
-        <>
-          <Box
-            at={[0, 0.75, 0.19]}
-            size={[0.38, 0.48, 0.035]}
-            color="#b1c4a0"
+    <group ref={root} position={initialPosition.current}>
+      <group ref={body}>
+        <group ref={legA} position={[-0.13, 0.44, 0]}>
+          <SoftBox
+            at={[0, -0.16, 0]}
+            size={[0.18, 0.43, 0.2]}
+            color="#394b50"
           />
-          <Box at={[-0.14, 1, 0.2]} size={[0.11, 0.065, 0.025]} color={CREAM} />
-        </>
-      )}
-      <group ref={head} position={[0, 1.39, 0]}>
-        <mesh castShadow>
-          <sphereGeometry args={[0.32, 12, 10]} />
-          <meshStandardMaterial color={person.skin} />
-        </mesh>
-        <Hair id={id} />
-        {[-0.11, 0.11].map((x) => (
-          <mesh key={x} position={[x, 0.02, 0.29]}>
-            <sphereGeometry args={[0.027, 6, 6]} />
-            <meshBasicMaterial color="#334137" />
+          <Box at={[0, -0.37, 0.05]} size={[0.2, 0.12, 0.32]} color="#f2e9d3" />
+        </group>
+        <group ref={legB} position={[0.13, 0.44, 0]}>
+          <SoftBox
+            at={[0, -0.16, 0]}
+            size={[0.18, 0.43, 0.2]}
+            color="#394b50"
+          />
+          <Box at={[0, -0.37, 0.05]} size={[0.2, 0.12, 0.32]} color="#f2e9d3" />
+        </group>
+        <SoftBox
+          at={[0, 0.83, 0]}
+          size={[0.56, 0.66, 0.35]}
+          color={person.outfit}
+        />
+        {employee && (
+          <>
+            <Box
+              at={[0, 0.75, 0.19]}
+              size={[0.38, 0.48, 0.035]}
+              color="#b1c4a0"
+            />
+            <Box
+              at={[-0.14, 1, 0.2]}
+              size={[0.11, 0.065, 0.025]}
+              color={CREAM}
+            />
+          </>
+        )}
+        <group ref={head} position={[0, 1.39, 0]}>
+          <mesh castShadow>
+            <sphereGeometry args={[0.32, 12, 10]} />
+            <meshStandardMaterial color={person.skin} />
           </mesh>
-        ))}
-        {[-0.31, 0.31].map((x) => (
+          <Hair id={id} />
+          <group ref={eyes}>
+            {[-0.11, 0.11].map((x) => (
+              <mesh key={x} position={[x, 0.02, 0.29]}>
+                <sphereGeometry args={[0.027, 6, 6]} />
+                <meshBasicMaterial color="#334137" />
+              </mesh>
+            ))}
+          </group>
+          {[-0.31, 0.31].map((x) => (
+            <mesh
+              key={`ear-${x}`}
+              position={[x, -0.035, 0]}
+              scale={[0.065, 0.09, 0.065]}
+              geometry={curlGeometry}
+              material={material(person.skin)}
+              dispose={null}
+            />
+          ))}
           <mesh
-            key={`ear-${x}`}
-            position={[x, -0.035, 0]}
-            scale={[0.065, 0.09, 0.065]}
+            position={[0, -0.06, 0.3]}
+            scale={[0.045, 0.05, 0.065]}
             geometry={curlGeometry}
             material={material(person.skin)}
             dispose={null}
           />
-        ))}
-        <mesh
-          position={[0, -0.06, 0.3]}
-          scale={[0.045, 0.05, 0.065]}
-          geometry={curlGeometry}
-          material={material(person.skin)}
-          dispose={null}
-        />
-        <mesh position={[0, -0.12, 0.3]} rotation={[0, 0, Math.PI]}>
-          <torusGeometry args={[0.065, 0.009, 4, 10, Math.PI]} />
-          <meshBasicMaterial color="#7e5141" />
-        </mesh>
-      </group>
-      <group ref={arm} position={[-0.36, 1.05, 0]}>
-        <SoftBox
-          at={[0, -0.2, 0]}
-          size={[0.16, 0.42, 0.19]}
-          color={person.skin}
-        />
-      </group>
-      <group ref={rightArm} position={[0.36, 1.05, 0]}>
-        <SoftBox
-          at={[0, -0.2, 0]}
-          size={[0.16, 0.42, 0.19]}
-          color={person.skin}
-        />
-      </group>
-      {!employee && (
-        <group position={[0.48, 0.58, 0.2]}>
-          <Box at={[0, 0, 0]} size={[0.48, 0.28, 0.38]} color="#c49a5c" />
-          <Box
-            at={[0, 0.07, 0]}
-            size={[0.4, 0.22, 0.3]}
-            color={basket ? "#9fb078" : "#7f765e"}
-          />
-          <mesh position={[0, 0.27, 0]} rotation={[0, Math.PI / 2, 0]}>
-            <torusGeometry args={[0.2, 0.025, 5, 12, Math.PI]} />
-            <meshStandardMaterial color="#776951" />
+          <mesh position={[0, -0.12, 0.3]} rotation={[0, 0, Math.PI]}>
+            <torusGeometry args={[0.065, 0.009, 4, 10, Math.PI]} />
+            <meshBasicMaterial color="#7e5141" />
           </mesh>
-          {basket > 0 && (
-            <Box
-              at={[0.08, 0.16, 0.04]}
-              size={[0.18, 0.2, 0.18]}
-              color="#e8c47b"
-            />
-          )}
         </group>
+        <group ref={arm} position={[-0.36, 1.05, 0]}>
+          <SoftBox
+            at={[0, -0.2, 0]}
+            size={[0.16, 0.42, 0.19]}
+            color={person.skin}
+          />
+        </group>
+        <group ref={rightArm} position={[0.36, 1.05, 0]}>
+          <SoftBox
+            at={[0, -0.2, 0]}
+            size={[0.16, 0.42, 0.19]}
+            color={person.skin}
+          />
+        </group>
+        {!employee && (
+          <group ref={basketRef} position={[0.48, 0.58, 0.2]}>
+            <Box at={[0, 0, 0]} size={[0.48, 0.28, 0.38]} color="#c49a5c" />
+            <Box
+              at={[0, 0.07, 0]}
+              size={[0.4, 0.22, 0.3]}
+              color={basket ? "#9fb078" : "#7f765e"}
+            />
+            <mesh position={[0, 0.27, 0]} rotation={[0, Math.PI / 2, 0]}>
+              <torusGeometry args={[0.2, 0.025, 5, 12, Math.PI]} />
+              <meshStandardMaterial color="#776951" />
+            </mesh>
+            {person.basket.slice(0, 3).map((line, i) => (
+              <Box
+                key={line.batchId}
+                at={[
+                  -0.11 + (i % 2) * 0.19,
+                  0.17 + (i === 2 ? 0.08 : 0),
+                  i === 2 ? -0.07 : 0.06,
+                ]}
+                size={[0.15, 0.23, 0.15]}
+                color={
+                  store.current.products.find((p) => p.id === line.productId)!
+                    .color
+                }
+              />
+            ))}
+          </group>
+        )}
+        {carrying && (
+          <group ref={cargoBox} position={[0, 0.7, 0.5]}>
+            <SoftBox at={[0, 0, 0]} size={[0.65, 0.55, 0.5]} color={WOOD} />
+            <Box at={[0, 0.28, 0]} size={[0.09, 0.015, 0.51]} color="#e8d1aa" />
+          </group>
+        )}
+        {task && task.stage !== "complete" && (
+          <mesh position={[0, 0.07, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.56, 0.65, 24]} />
+            <meshBasicMaterial
+              color={
+                task.kind === "checkout"
+                  ? "#e3bb68"
+                  : task.kind === "online"
+                    ? "#a798c3"
+                    : "#8eae73"
+              }
+              transparent
+              opacity={0.75}
+            />
+          </mesh>
+        )}
+      </group>
+      {task && task.stage !== "complete" && (
+        <Billboard position={[0, 2.25, 0]}>
+          <Sign
+            text={
+              task.kind === "checkout"
+                ? "OPENING TILL 3"
+                : task.kind === "online"
+                  ? "COLLECTION"
+                  : "STOCK RUN"
+            }
+            at={[0, 0, 0]}
+            width={3.2}
+            small
+            background={task.kind === "checkout" ? "#f2ddac" : "#e3ebd3"}
+          />
+        </Billboard>
       )}
-      {carrying && (
-        <Box at={[0, 0.7, 0.5]} size={[0.65, 0.55, 0.5]} color={WOOD} />
-      )}
+      <group ref={pickedItem} position={[-0.38, 1.1, 0.42]} visible={false}>
+        <SoftBox
+          at={[0, 0, 0]}
+          size={[0.19, 0.22, 0.2]}
+          color={
+            store.current.products.find(
+              (v) => v.id === person.list[person.visited],
+            )?.color ?? "#debc70"
+          }
+        />
+      </group>
     </group>
   );
 }
@@ -662,15 +920,15 @@ function Camera({ reset }: { reset: number }) {
   const controls = useRef<Controls>(null!);
   useEffect(() => {
     const scale = Math.min(
-      size.width / (size.width < 700 ? 48 : 44),
-      size.height / 38,
+      size.width / (size.width < 700 ? 59 : 58),
+      size.height / 35,
     );
     (camera as THREE.OrthographicCamera).zoom = scale;
-    camera.position.set(33, 35, 40);
-    camera.lookAt(0, 0, 0);
+    camera.position.set(35, 43, 45);
+    camera.lookAt(0, 0, 1.5);
     camera.updateProjectionMatrix();
     if (controls.current) {
-      controls.current.target.set(0, 0, 0);
+      controls.current.target.set(0, 0, 1.5);
       controls.current.update();
     }
   }, [camera, reset, size.width, size.height]);
@@ -715,58 +973,59 @@ function World({
 }) {
   return (
     <group>
-      <SoftBox at={[0, -0.45, 0]} size={[34, 0.8, 29]} color="#d5c9ad" />
-      <Box at={[0, -0.03, 0]} size={[33.4, 0.12, 28.4]} color="#f0e7d1" />
-      {Array.from({ length: 17 }, (_, i) => (
+      <SoftBox
+        at={[0, -0.45, 0]}
+        size={[FLOOR.width, 0.8, FLOOR.depth]}
+        color="#d5c9ad"
+      />
+      <Box
+        at={[0, -0.03, 0]}
+        size={[FLOOR.width - 0.6, 0.12, FLOOR.depth - 0.6]}
+        color="#f0e7d1"
+      />
+      {Array.from({ length: 21 }, (_, i) => (
         <Box
           key={`x${i}`}
-          at={[-16 + i * 2, 0.04, 0]}
-          size={[0.018, 0.006, 28]}
+          at={[-20 + i * 2, 0.04, 0]}
+          size={[0.018, 0.006, 35.5]}
           color="#ddd2bb"
         />
       ))}
-      {Array.from({ length: 15 }, (_, i) => (
+      {Array.from({ length: 19 }, (_, i) => (
         <Box
           key={`z${i}`}
-          at={[0, 0.04, -14 + i * 2]}
-          size={[33, 0.006, 0.018]}
+          at={[0, 0.04, -18 + i * 2]}
+          size={[41.5, 0.006, 0.018]}
           color="#ddd2bb"
         />
       ))}
-      <Box at={[0, 1.2, -13.8]} size={[33.8, 2.4, 0.28]} color="#c3ceb7" />
-      <Box at={[-16.8, 0.65, 0]} size={[0.28, 1.3, 28]} color="#d2d8bc" />
-      <Box at={[16.8, 0.4, 0]} size={[0.28, 0.8, 28]} color="#d2d8bc" />
-      <Box at={[0, 2.45, -13.8]} size={[34, 0.12, 0.4]} color={GREEN} />
-      <Sign
-        text="ABC SHOP"
-        at={[-8, 2.1, -13.6]}
-        width={5.5}
-        background="#c3ceb7"
-      />
-      <Sign
-        text="PARIS FLAGSHIP"
-        at={[7, 2.1, -13.6]}
-        width={6}
-        background="#c3ceb7"
-      />
+      {/* Low cutaway walls keep the backroom visible at every supported camera angle. */}
+      <Box at={[0, 0.26, -17.8]} size={[42, 0.52, 0.28]} color="#c3ceb7" />
+      <Box at={[-20.8, 0.18, 0]} size={[0.28, 0.36, 36]} color="#d2d8bc" />
+      <Box at={[20.8, 0.18, 0]} size={[0.28, 0.36, 36]} color="#d2d8bc" />
+      <Box at={[0, 0.56, -17.8]} size={[42, 0.12, 0.4]} color={GREEN} />
       <group
         onClick={(e) => {
           e.stopPropagation();
           onSelect("stockroom");
         }}
       >
-        <Box at={[8, 0.07, -11]} size={[14, 0.06, 4.5]} color="#d5d2b8" />
-        <Sign text="STOCKROOM" at={[8, 1.2, -13.55]} width={4.5} />
-        {[4, 7, 10, 13].map((x, i) => (
+        <Box at={[10, 0.07, -13.8]} size={[17, 0.06, 5.4]} color="#d5d2b8" />
+        <Sign text="BACKROOM STOCK" at={[9, 0.13, -12]} width={7} flat />
+        {[5, 8.5, 12, 15.5].map((x, i) => (
           <group key={x}>
-            <Box at={[x, 0.6, -12]} size={[2, 1.2, 1.3]} color={WOOD} />
+            <Box at={[x, 0.6, -14.8]} size={[2, 1.2, 1.3]} color={WOOD} />
             <Box
-              at={[x, 0.65, -11.32]}
+              at={[x, 0.65, -14.12]}
               size={[0.12, 1, 0.02]}
               color="#e8d1aa"
             />
             {i % 2 === 0 && (
-              <Box at={[x, 1.5, -12]} size={[1.8, 0.6, 1.2]} color="#b48f68" />
+              <Box
+                at={[x, 1.5, -14.8]}
+                size={[1.8, 0.6, 1.2]}
+                color="#b48f68"
+              />
             )}
           </group>
         ))}
@@ -777,12 +1036,12 @@ function World({
           onSelect("receiving");
         }}
       >
-        <Box at={[-11, 0.08, -11]} size={[7, 0.08, 4]} color="#dbd7bc" />
-        <Sign text="RECEIVING" at={[-11, 1, -13.5]} width={4} />
+        <Box at={[-13, 0.08, -13.8]} size={[10, 0.08, 5.4]} color="#dbd7bc" />
+        <Sign text="DELIVERIES" at={[-13, 0.15, -12]} width={6} flat />
         {[0, 1, 2].map((i) => (
           <Box
             key={i}
-            at={[-13 + i * 2, 0.5, -11.6]}
+            at={[-16 + i * 2.6, 0.5, -14.8]}
             size={[1.5, 1, 1.4]}
             color={
               state.batches.some((b) => b.receiving > 0) ? "#c39460" : "#d6b78d"
@@ -825,6 +1084,9 @@ function World({
             size={[0.56, 0.3, 0.02]}
             color="#a6c8a0"
           />
+          <group position={[x, 0, z]}>
+            <CheckoutBelt index={i} store={store} running={running} />
+          </group>
           <Sign
             text={`${i + 1}  ${state.checkouts[i] ? "OPEN" : "CLOSED"}`}
             at={[x, 2.2, z - 0.5]}
@@ -839,6 +1101,7 @@ function World({
         </group>
       ))}
       <group
+        position={[PICKUP[0] - 14, 0, PICKUP[1] - 8]}
         onClick={(e) => {
           e.stopPropagation();
           onSelect("pickup");
@@ -850,18 +1113,17 @@ function World({
           <Box at={[14, 1.5, 6.2]} size={[0.8, 0.6, 0.7]} color={WOOD} />
         )}
       </group>
-      <Box at={[12, 0.065, 12.8]} size={[6, 0.04, 1.8]} color="#849b7c" />
-      <Sign text="WELCOME" at={[12, 0.5, 14.1]} width={3.5} />
-      {[-15, 16].map((x) => (
+      <Entrance store={store} running={running} reduced={reduced} />
+      {[-19, 20].map((x) => (
         <group key={x}>
-          <mesh position={[x, 0.4, 12]}>
+          <mesh position={[x, 0.4, 15]}>
             <cylinderGeometry args={[0.5, 0.4, 0.8, 10]} />
             <meshStandardMaterial color="#bd9672" />
           </mesh>
           {[-0.35, 0, 0.35].map((a, i) => (
             <mesh
               key={i}
-              position={[x + a, 1.2 + i * 0.2, 12]}
+              position={[x + a, 1.2 + i * 0.2, 15]}
               rotation={[0, 0, a]}
               scale={[0.5, 1, 0.4]}
             >
@@ -871,7 +1133,8 @@ function World({
           ))}
         </group>
       ))}
-      <group position={[13, 3, -13]}>
+      <Box at={[18, 1.5, -17]} size={[0.09, 3, 0.09]} color={GREEN} />
+      <group position={[18, 3, -17]}>
         <Box at={[0, 0, 0]} size={[0.35, 0.25, 0.65]} color="#ece8d8" />
         <mesh position={[0, 0, 0.35]} rotation={[Math.PI / 2, 0, 0]}>
           <cylinderGeometry args={[0.1, 0.1, 0.1, 10]} />
@@ -970,7 +1233,7 @@ export default function StoreScene({
             frameloop={running.current && active ? "always" : "demand"}
             shadows={!small}
             dpr={[1, small ? 1.25 : 1.6]}
-            camera={{ position: [33, 35, 40], zoom: 18, near: 0.1, far: 150 }}
+            camera={{ position: [35, 43, 45], zoom: 18, near: 0.1, far: 150 }}
             gl={{
               antialias: true,
               powerPreference: small ? "low-power" : "high-performance",

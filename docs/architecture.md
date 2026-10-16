@@ -1,6 +1,6 @@
 # Store simulation architecture
 
-The flagship is authoritative in one browser-local `StoreState`. `advance(state, dt)` mutates it in deterministic fixed steps. A seeded generator controls shopping-list choices. `useSimulation` owns the state reference, playback state and 100ms UI snapshots. The renderer reads the same reference and interpolates people at display refresh rate.
+The flagship is authoritative in one browser-local `StoreState`. `advance(state, dt)` mutates it in deterministic fixed steps. A seeded generator controls shopping-list choices. `useSimulation` owns the state reference, playback state and 100ms UI snapshots. The renderer reads the same reference and interpolates people at display refresh rate. Each human keeps a stable initial transform so React snapshots do not snap its interpolated position back to the fixed-step coordinates. Walking cadence follows rendered distance.
 
 - `src/simulation/store.ts`: typed products, batches, people, tasks, transactions, recommendations, events, pathfinding and calculations.
 - `src/simulation/useSimulation.ts`: fixed-step lifecycle, overlay pause, speed, decisions and reset.
@@ -12,7 +12,7 @@ The flagship is authoritative in one browser-local `StoreState`. `advance(state,
 
 Every product batch tracks `received`, `shelf`, `backroom`, `receiving`, `inBaskets`, `inTransit`, `sold`, `waste`, and `expiresAt`. The sum of all locations equals received units. Picks consume earliest-expiring shelf stock. Only payment moves basket units to sold and creates revenue. Staff collect real units before replenishing or completing collection orders. Expired shelf, backroom and receiving stock moves to waste.
 
-Fixtures have fixed footprints. Occupancy-aware A* routes use half-metre lanes. Each continuous movement segment checks personal-space clearance against other visible people; blocked walkers reroute or step aside rather than crossing another character. Interaction destinations are reserved, queue slots are separated from the active payment position, and entry is staggered. Twelve shopper journeys and six colleagues keep the floor readable. Unassigned floor staff make department inspection rounds; checkout staff have working gestures. People stop when paused. Employee tasks reserve colleagues so simultaneous priorities cannot assign one person twice.
+Fixtures have fixed footprints. Occupancy-aware A* routes use half-metre lanes, then line-of-sight smoothing removes unnecessary grid turns without crossing fixtures or personal space. The floor is 42 × 36 with eight-metre fixtures. Each continuous movement segment checks personal-space clearance against other visible people; blocked walkers reroute or step aside rather than crossing another character. Interaction destinations are reserved, queue slots are separated from the active payment position, and entry is staggered. Twelve shopper journeys and six colleagues keep the floor readable. Unassigned floor staff make department inspection rounds; checkout staff have working gestures. People stop when paused. Employee tasks reserve colleagues so simultaneous priorities cannot assign one person twice.
 
 ## Boundaries
 
@@ -23,3 +23,5 @@ There is no backend, persistence, broker connection or live model call. Reset re
 Unit tests exercise conservation through transactions, delivery, replenishment and expiry; seeded replay; staffing; price consistency; decisions applying once; route safety and bounded history. Browser coverage checks desktop/mobile layouts, playback, modal pause restoration, inspector prices, event filtering, map profiles, reduced motion, reset and unsupported WebGL.
 
 Manager choices set inventory, service, freshness and fulfilment policies. Local agents dispatch individual staff tasks under those policies. Inventory thresholds apply across departments, rather than treating a single shelf as a management decision.
+
+Only two pending recommendations are exposed at a time. A one-shot decision log drives the recent outcome summaries; progress text comes from task stages and completed operations. Bakery promotions redirect two eligible shoppers and change shared prices; they never award stock or revenue directly.
