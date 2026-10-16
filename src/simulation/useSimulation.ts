@@ -14,6 +14,7 @@ export function useSimulation(overlayOpen: boolean) {
   const [snapshot, setSnapshot] = useState({ ...store.current });
   const [playing, setPlaying] = useState(true);
   const [speed, setSpeed] = useState<1 | 2>(1);
+  const [generation, setGeneration] = useState(0);
   const running = playing && !overlayOpen;
   const runningRef = useRef(running);
   runningRef.current = running;
@@ -45,10 +46,12 @@ export function useSimulation(overlayOpen: boolean) {
   }, []);
   const reset = useCallback(() => {
     store.current = createStore();
+    setGeneration((n) => n + 1);
     setSnapshot({ ...store.current });
   }, []);
   return {
     store,
+    generation,
     snapshot,
     playing,
     setPlaying,

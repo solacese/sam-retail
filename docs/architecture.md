@@ -16,7 +16,7 @@ Fixtures have fixed footprints. Occupancy-aware A* routes use half-metre lanes, 
 
 ## Boundaries
 
-There is no backend, persistence, broker connection or live model call. Reset recreates the seed and starting state. Other shops are illustrative profiles rather than additional simulations. A future remote adapter must replace local authority with server snapshots and authenticated commands; adding a broker transport to this browser state would not create a production retail system.
+The simulation has no remote persistence or broker connection. Reset recreates the seed and starting state. Other shops are illustrative profiles rather than additional simulations. The read-only shop assistant has a separate AWS backend and a real model connection; it cannot change simulation state. A future remote simulation adapter must replace local authority with server snapshots and authenticated commands; adding a broker transport to this browser state would not create a production retail system.
 
 ## Validation
 

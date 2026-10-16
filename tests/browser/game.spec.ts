@@ -1014,3 +1014,103 @@ test("an unpaid exit sends the shopper back to an open till before payment", asy
       .filter({ hasText: "purchase/till/completed" }),
   ).not.toHaveCount(0);
 });
+
+test("shop chat sits below decisions and uses fresh inventory with follow-ups and reset", async ({
+  page,
+}, testInfo) => {
+  const requests: any[] = [];
+  await page.route(
+    "https://*.execute-api.ca-central-1.amazonaws.com/chat",
+    async (route) => {
+      const input = route.request().postDataJSON();
+      requests.push(input);
+      expect(route.request().headers().authorization).toBeUndefined();
+      await route.fulfill({
+        json: {
+          answer:
+            requests.length === 1
+              ? "There are 1,251 units on hand, including baskets and transfers."
+              : "There are 5 apples on the shelves.",
+          at: input.context.at,
+        },
+      });
+    },
+  );
+  await resetPausedStore(page);
+  const chat = page.getByRole("region", { name: "Ask the shop", exact: true });
+  const decisionBox = (await page
+    .locator(".recommendation")
+    .last()
+    .boundingBox())!;
+  const chatBox = (await chat.boundingBox())!;
+  expect(chatBox.y).toBeGreaterThanOrEqual(decisionBox.y + decisionBox.height);
+  await chat
+    .getByRole("textbox", { name: "Question about the shop" })
+    .fill("What is the total inventory?");
+  await chat.getByRole("button", { name: "Send shop question" }).click();
+  await expect(chat.getByRole("log")).toContainText("1,251 units on hand");
+  expect(requests[0].context.inventory.totalOnHand).toBe(1251);
+  expect(requests[0].context.inventory.products).toHaveLength(24);
+  expect(requests[0].history).toHaveLength(0);
+  await chat
+    .getByRole("textbox", { name: "Question about the shop" })
+    .fill("And how many apples?");
+  await chat
+    .getByRole("textbox", { name: "Question about the shop" })
+    .press("Enter");
+  await expect(chat.getByRole("log")).toContainText("5 apples on the shelves");
+  expect(requests[1].history).toHaveLength(2);
+  expect(requests[1].question).toBe("And how many apples?");
+  await page.screenshot({
+    path: `/tmp/abc-shop-chat-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.getByRole("button", { name: "Reset store", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Reset store", exact: true })
+    .click();
+  await expect(chat.getByRole("log")).toHaveCount(0);
+  await expect(
+    chat.getByRole("button", { name: "Incidents", exact: true }),
+  ).toBeVisible();
+});
+
+test("shop chat recovers from an unavailable service and renders replies as text", async ({
+  page,
+}) => {
+  let calls = 0;
+  await page.route(
+    "https://*.execute-api.ca-central-1.amazonaws.com/chat",
+    async (route) => {
+      calls++;
+      await route.fulfill(
+        calls === 1
+          ? { status: 503, json: { error: "unavailable" } }
+          : {
+              json: {
+                answer: "No active incidents. <script>window.bad=true</script>",
+                at: "09:00:00",
+              },
+            },
+      );
+    },
+  );
+  await resetPausedStore(page);
+  const chat = page.getByRole("region", { name: "Ask the shop", exact: true });
+  await chat.getByRole("button", { name: "Incidents", exact: true }).click();
+  await expect(chat.getByRole("alert")).toContainText("Please try again");
+  await expect(chat.getByRole("textbox")).toHaveValue("Any incidents?");
+  await chat.getByRole("button", { name: "Send shop question" }).click();
+  await expect(chat.getByRole("log")).toContainText(
+    "No active incidents. <script>",
+  );
+  await expect(chat.getByRole("alert")).toHaveCount(0);
+  await expect(chat.locator("script")).toHaveCount(0);
+  await expect(chat.getByRole("textbox")).toBeEnabled();
+});

@@ -49,6 +49,7 @@ import {
 } from "./shop/PeopleControls";
 import { PromotionInspector, SecurityInspector } from "./shop/ShopLifeControls";
 import { StorePulse } from "./shop/StorePulse";
+import { ShopChat } from "./chat/ShopChat";
 const StoreScene = lazy(() => import("./shop/StoreScene"));
 const money = (n: number) =>
   new Intl.NumberFormat("en-IE", {
@@ -628,6 +629,7 @@ export default function App() {
               </div>
             </>
           )}
+          <ShopChat key={sim.generation} state={s} />
           {s.decisionLog.length > 0 && (
             <section
               className="store-changes"
@@ -828,8 +830,8 @@ export default function App() {
             )}
           </div>
           <p className="event-footnote">
-            Events come from this store’s local simulation. No live broker or
-            model is connected.
+            Events come from this store’s local simulation. Ask the shop answers
+            questions using the current store data.
           </p>
         </Dialog>
       )}
@@ -876,7 +878,8 @@ export default function App() {
             <p>
               This is a deterministic local demonstration of Solace event-driven
               coordination. Stores and benefits are illustrative; no live Solace
-              broker or AI model is connected.
+              broker is connected. Ask the shop uses AI to answer questions
+              about your running store.
             </p>
             <button className="primary" onClick={() => setPanel(null)}>
               Back to the shop <ArrowRight size={17} />

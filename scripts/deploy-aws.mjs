@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { deployChat } from "./deploy-chat.mjs";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const region =
   process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "ca-central-1";
@@ -23,6 +24,8 @@ if (run("git", ["status", "--porcelain"], true))
     "Commit the reviewed source before deployment so release.json identifies the exact version.",
   );
 const commit = run("git", ["rev-parse", "HEAD"], true);
+const chatUrl = deployChat({ region, stack: `${stack}-chat` });
+process.env.VITE_SHOP_CHAT_URL = chatUrl;
 if (!process.argv.includes("--skip-build")) run("npm", ["run", "build:aws"]);
 const aws = (args, capture = false) =>
   run("aws", [...args, "--region", region], capture);
@@ -120,6 +123,7 @@ console.log(
   JSON.stringify(
     {
       url,
+      chatUrl,
       commit,
       stack,
       region,

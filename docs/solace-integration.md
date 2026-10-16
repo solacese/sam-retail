@@ -1,6 +1,6 @@
 # Future Solace integration
 
-The current release is entirely local. It demonstrates Solace-style event topics and specialist coordination using deterministic rules. No broker or model API is connected. The former card game's `BackendEventAdapter` is preserved only in the `archive/card-game-2026-10-16` Git tag.
+The shop simulation runs locally. It demonstrates Solace-style event topics and specialist coordination using deterministic rules; no live broker is connected. The read-only shop chat calls a real model through an AWS backend, using a snapshot of the running shop. It cannot issue simulation commands. The former card game's `BackendEventAdapter` is preserved only in the `archive/card-game-2026-10-16` Git tag.
 
 A future integrated mode should use a server-authoritative simulation, authenticated store sessions, server-side broker credentials, and idempotent decision commands. The browser would render validated snapshots and submit approvals to a backend. No credentials should be embedded in GitHub Pages or Vite variables. Topic permissions and order authorization must be enforced server-side.
 

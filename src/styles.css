@@ -2738,3 +2738,173 @@ button:hover:not(:disabled) {
     font-size: 12px;
   }
 }
+
+/* A small conversational companion, below the team's decisions. */
+.shop-chat {
+  margin: 24px 0;
+  padding: 19px 0;
+  border-top: 1px solid #dce2d2;
+  border-bottom: 1px solid #dce2d2;
+}
+.chat-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #345b49;
+}
+.chat-heading h2 {
+  font-size: 17px;
+  margin: 0;
+  letter-spacing: -0.4px;
+}
+.chat-heading > span {
+  margin-left: auto;
+  font-size: 10px;
+  color: #7d8b75;
+}
+.chat-intro {
+  margin: 10px 0 12px;
+  color: #7b8873;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.chat-suggestions button {
+  border: 1px solid #dbe3cf;
+  border-radius: 12px;
+  padding: 7px 9px;
+  font-size: 11px;
+  background: #eef1e5;
+  color: #48634d;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-suggestions button:hover {
+  background: #e0e9d5;
+}
+.chat-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 7px;
+  background: #fffef8;
+  border: 1px solid #ced9c3;
+  border-radius: 14px;
+  padding: 9px;
+}
+.chat-form:focus-within {
+  outline: 2px solid #7fa88c;
+  outline-offset: 2px;
+}
+.chat-form textarea {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  max-height: 125px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  outline: 0;
+  color: #2f503e;
+}
+.chat-form textarea::placeholder {
+  color: #91a086;
+}
+.chat-form > button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 10px;
+  color: #fffef7;
+  background: #315d49;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.chat-form > button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 15px 0;
+  padding: 2px 5px 2px 0;
+  scrollbar-width: thin;
+}
+.chat-message {
+  padding: 12px;
+  background: #edf1e5;
+  border-radius: 14px 14px 14px 3px;
+}
+.chat-message.user {
+  background: #e0eadd;
+  margin-left: 18px;
+  border-radius: 14px 14px 3px 14px;
+}
+.chat-message > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #6a8168;
+  font-size: 10px;
+  font-weight: 700;
+}
+.chat-message p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 7px 0 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: #36513e;
+}
+.chat-thinking {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: #6c8267;
+}
+.chat-error {
+  font-size: 13px;
+  color: #97624b;
+  line-height: 1.6;
+}
+.chat-snapshot-note {
+  margin: 9px 0 0;
+  font-size: 10px;
+  line-height: 1.6;
+  color: #849078;
+}
+@media (max-width: 760px) {
+  .shop-chat {
+    margin: 20px 0;
+  }
+  .chat-heading h2 {
+    font-size: 19px;
+  }
+  .chat-form textarea {
+    font-size: 16px;
+  }
+  .chat-suggestions button {
+    min-height: 40px;
+    font-size: 13px;
+  }
+  .chat-message p {
+    font-size: 16px;
+  }
+  .store-sidebar.has-selection .shop-chat {
+    display: none;
+  }
+}
