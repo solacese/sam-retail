@@ -2547,3 +2547,18 @@ button:hover:not(:disabled) {
     font-size: 11px;
   }
 }
+
+@media (min-width: 1121px) {
+  .workspace {
+    height: max(735px, calc(100dvh - 211px));
+    min-height: 735px;
+  }
+  .shop-stage,
+  .canvas-wrap {
+    min-height: 0;
+  }
+  .store-sidebar {
+    min-height: 0;
+    max-height: 100%;
+  }
+}

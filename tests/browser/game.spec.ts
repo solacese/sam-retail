@@ -541,6 +541,8 @@ test("a person can start a conversation and the selection works without WebGL", 
 test("a tap on a 3D shopper opens the contextual person menu", async ({
   page,
 }, testInfo) => {
+  if (testInfo.project.name === "desktop")
+    await page.setViewportSize({ width: 1318, height: 836 });
   await openStore(page);
   await pause(page);
   if (!(await page.locator("canvas").count()))
@@ -583,4 +585,7 @@ test("a tap on a 3D shopper opens the contextual person menu", async ({
   await expect(
     menu.getByRole("button", { name: "Wave hello", exact: true }),
   ).toBeVisible();
+  const after = await canvas.boundingBox();
+  expect(Math.abs(after!.height - box.height)).toBeLessThan(1);
+  expect(Math.abs(after!.width - box.width)).toBeLessThan(1);
 });
