@@ -1,7 +1,12 @@
 /** One deterministic source of truth for the store, scene and event stream. */
 export type Point = [number, number];
 export type Category =
-  "inventory" | "pricing" | "purchases" | "iot" | "agents" | "operations";
+  | "inventory"
+  | "pricing"
+  | "purchases"
+  | "iot"
+  | "agents"
+  | "operations";
 export type DecisionKind = "restock" | "checkout" | "meal" | "online";
 export interface Department {
   id: string;
@@ -150,7 +155,7 @@ export interface StoreEvent {
   message: string;
   target?: string;
 }
-export type ActivityKind = "chat" | "dance" | "tidy" | "cleanup";
+export type ActivityKind = "chat" | "dance" | "tidy" | "cleanup" | "walk";
 export interface StoreActivity {
   id: number;
   kind: ActivityKind;
@@ -172,6 +177,7 @@ export interface FloorItem {
   clearedAt?: number;
 }
 export type StoreCommand =
+  | { type: "walk"; personId: number; position: Point }
   | { type: "wave"; personId: number }
   | { type: "chat"; personId: number }
   | { type: "dance"; personId: number }
@@ -1503,6 +1509,10 @@ export function personName(p: Person) {
 }
 export function personActivity(s: StoreState, p: Person) {
   const a = s.activities.find((a) => a.id === p.activityId);
+  if (a?.kind === "walk")
+    return a.stage === "approaching"
+      ? "Walking where you pointed"
+      : "Made it! Looking around";
   if (a)
     return a.stage === "approaching"
       ? a.kind === "chat"
@@ -1549,6 +1559,24 @@ function canPlay(p: Person) {
       : p.id >= 102 && p.stage === "working")
   );
 }
+/** Player directions can interrupt browsing, a queue or a social moment, never a transaction or stock task. */
+export function canDirectPerson(p: Person) {
+  return (
+    !p.taskId &&
+    (p.role === "shopper"
+      ? ["shopping", "picking", "entering", "queueing", "interacting"].includes(
+          p.stage,
+        )
+      : p.id >= 102 && ["working", "interacting"].includes(p.stage))
+  );
+}
+function prepareDirection(s: StoreState, p: Person) {
+  const activity = s.activities.find((a) => a.id === p.activityId);
+  if (activity) finishActivity(s, activity, true);
+  // Queues derive from stage; leaving one immediately releases this shopper's place.
+  p.stage = p.role === "shopper" ? "shopping" : "working";
+  p.timer = 0;
+}
 function beginActivity(
   s: StoreState,
   kind: ActivityKind,
@@ -1563,9 +1591,10 @@ function beginActivity(
     people: people.map((p) => p.id),
     target,
     stage: "approaching",
-    remaining: kind === "chat" ? 5 : kind === "dance" ? 3 : 3.5,
+    remaining:
+      kind === "walk" ? 1 : kind === "chat" ? 5 : kind === "dance" ? 3 : 3.5,
     startedAt: s.time,
-    deadline: s.time + 35,
+    deadline: s.time + (kind === "walk" ? 75 : 35),
     line,
   };
   s.activities.push(activity);
@@ -1652,7 +1681,9 @@ function activityStep(s: StoreState, dt: number) {
           ? `${people.map(personName).join(" and ")} stopped for a friendly chat.`
           : a.kind === "dance"
             ? `${personName(people[0])} found their favourite tune!`
-            : `${personName(people[0])} is ${a.kind === "cleanup" ? "clearing the aisle" : "tidying the display"}.`,
+            : a.kind === "walk"
+              ? `${personName(people[0])} reached the spot you chose.`
+              : `${personName(people[0])} is ${a.kind === "cleanup" ? "clearing the aisle" : "tidying the display"}.`,
         a.target ?? `person:${people[0].id}`,
       );
     }
@@ -1818,6 +1849,44 @@ export function interact(
     "personId" in command
       ? s.people.find((p) => p.id === command.personId)
       : undefined;
+  if (command.type === "walk") {
+    const target = command.position;
+    if (!target.every(Number.isFinite) || blocked(...target))
+      return { ok: false, message: "Choose an open spot on the shop floor." };
+    if (!p || !canDirectPerson(p))
+      return {
+        ok: false,
+        message: "Let them finish serving or carrying stock first.",
+      };
+    // Validate before interrupting anything. A nearby free spot preserves personal space.
+    const probe = { ...p, route: [...p.route] };
+    go(s, probe, target);
+    // A crowd can temporarily block the first step. Accept a physically valid
+    // order and let the movement solver yield/reroute as the aisle clears.
+    if (!probe.route.length)
+      probe.route = routeBetween(p.position, probe.destination!);
+    if (!probe.route.length)
+      return {
+        ok: false,
+        message: "That spot is busy. Try a little further along the aisle.",
+      };
+    prepareDirection(s, p);
+    beginActivity(s, "walk", [p]);
+    p.destination = probe.destination;
+    p.route = probe.route;
+    p.blockedFor = 0;
+    emit(
+      s,
+      "operations",
+      `people/${p.id}/destination/selected`,
+      `${personName(p)} is walking to your chosen spot.`,
+      `person:${p.id}`,
+    );
+    return {
+      ok: true,
+      message: `${personName(p)} is on the way. Click another spot to change course.`,
+    };
+  }
   if (command.type === "wave") {
     if (!p || p.stage === "outside")
       return { ok: false, message: "They are outside just now." };
@@ -1873,6 +1942,28 @@ export function interact(
   }
   const department = DEPARTMENTS.find((d) => d.id === command.departmentId);
   if (!department) return { ok: false, message: "Choose a department first." };
+  if (p) {
+    if ((command.type === "browse") !== (p.role === "shopper"))
+      return {
+        ok: false,
+        message: "Shoppers browse; store colleagues look after displays.",
+      };
+    if (!canDirectPerson(p))
+      return {
+        ok: false,
+        message: "Let them finish serving or carrying stock first.",
+      };
+    if (
+      command.type === "browse" &&
+      !s.products.some(
+        (v) => v.department === department.id && stock(s, v.id).shelf > 0,
+      )
+    )
+      return { ok: false, message: "This shelf is awaiting fresh stock." };
+    if (command.type === "browse" && p.list.length > 10)
+      return { ok: false, message: "Let them finish a little shopping first." };
+    prepareDirection(s, p);
+  }
   const candidates = s.people.filter(
     (person) =>
       canPlay(person) &&

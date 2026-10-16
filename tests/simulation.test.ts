@@ -533,3 +533,146 @@ it("queues an approved service priority honestly while colleagues finish player 
   expect(decisionImpact(s, "checkout")).toContain("Checkout 3 is open");
   conservation(s);
 });
+
+describe("point-and-click directions", () => {
+  it("accepts an open-floor order while nearby shoppers temporarily block the way", () => {
+    const s = createStore(),
+      p = s.people[0];
+    p.position = [-7, -10];
+    for (let i = 1; i <= 6; i++) {
+      const angle = (i * Math.PI) / 3;
+      s.people[i].position = [
+        -7 + Math.cos(angle) * 1.3,
+        -10 + Math.sin(angle) * 1.3,
+      ];
+    }
+    const before = [...p.position];
+    expect(
+      interact(s, { type: "walk", personId: p.id, position: [7, -10] }).ok,
+    ).toBe(true);
+    expect(p.position).toEqual(before);
+    expect(p.destination).toEqual([7, -10]);
+    expect(p.route.length).toBeGreaterThan(0);
+    conservation(s);
+  });
+
+  it("replaces a social activity without leaving its partner reserved", () => {
+    const s = createStore();
+    expect(interact(s, { type: "chat", personId: 0 }).ok).toBe(true);
+    const chat = s.activities[0],
+      partner = s.people.find((p) => p.id === chat.people[1])!;
+    expect(
+      interact(s, { type: "walk", personId: 0, position: [-7, -10] }).ok,
+    ).toBe(true);
+    expect(chat.stage).toBe("cancelled");
+    expect(partner.activityId).toBeUndefined();
+    expect(partner.stage).not.toBe("interacting");
+    expect(s.activities.filter((a) => a.stage === "approaching")).toHaveLength(
+      1,
+    );
+    conservation(s);
+  });
+  it("walks to a floor destination without teleporting, then resumes shopping", () => {
+    const s = createStore(),
+      p = s.people[0];
+    s.nextSocialAt = s.nextMishapAt = Infinity;
+    const initial = [...p.position],
+      list = [...p.list];
+    expect(
+      interact(s, { type: "walk", personId: p.id, position: [-7, -10] }).ok,
+    ).toBe(true);
+    const activity = s.activities.find((a) => a.id === p.activityId)!;
+    const target = [...p.destination!];
+    expect(p.position).toEqual(initial);
+    expect(p.route.length).toBeGreaterThan(0);
+    let reached = false;
+    for (let i = 0; i < 700 && activity.stage !== "complete"; i++) {
+      const before = [...p.position];
+      advance(s, 0.1);
+      expect(
+        Math.hypot(p.position[0] - before[0], p.position[1] - before[1]),
+      ).toBeLessThan(0.4);
+      if (
+        Math.hypot(p.position[0] - target[0], p.position[1] - target[1]) < 0.1
+      )
+        reached = true;
+    }
+    expect(reached).toBe(true);
+    expect(activity.stage).toBe("complete");
+    expect(p.activityId).toBeUndefined();
+    expect(p.list).toEqual(list);
+    expect(p.stage).toBe("shopping");
+    conservation(s);
+  });
+  it("releases a queue place while preserving the basket and allows a shelf order", () => {
+    const s = createStore(),
+      p = s.people.find((p) => p.stage === "queueing")!;
+    const basket = structuredClone(p.basket);
+    expect(
+      interact(s, { type: "walk", personId: p.id, position: [-7, 6] }).ok,
+    ).toBe(true);
+    expect(p.stage).toBe("interacting");
+    expect(p.basket).toEqual(basket);
+    const walk = s.activities.find((a) => a.id === p.activityId)!;
+    expect(
+      interact(s, { type: "browse", personId: p.id, departmentId: "drinks" })
+        .ok,
+    ).toBe(true);
+    expect(walk.stage).toBe("cancelled");
+    expect(p.stage).toBe("shopping");
+    expect(p.activityId).toBeUndefined();
+    expect(s.products.find((v) => v.id === p.list[p.visited])!.department).toBe(
+      "drinks",
+    );
+    expect(p.basket).toEqual(basket);
+    conservation(s);
+  });
+  it("rejects blocked and invalid destinations without cancelling the current order", () => {
+    const s = createStore(),
+      p = s.people[0];
+    expect(
+      interact(s, { type: "walk", personId: p.id, position: [-7, -10] }).ok,
+    ).toBe(true);
+    const previous = structuredClone(p);
+    for (const position of [
+      [0, -6],
+      [50, 50],
+      [NaN, 0],
+      [0, Infinity],
+    ] as [number, number][])
+      expect(interact(s, { type: "walk", personId: p.id, position }).ok).toBe(
+        false,
+      );
+    expect(p).toEqual(previous);
+    expect(
+      interact(s, { type: "walk", personId: p.id, position: [7, -10] }).ok,
+    ).toBe(true);
+    expect(s.activities[0].stage).toBe("cancelled");
+    expect(s.activities.filter((a) => a.stage === "approaching")).toHaveLength(
+      1,
+    );
+    conservation(s);
+  });
+  it("keeps cashiers, transactions and reserved stock tasks intact", () => {
+    const s = createStore();
+    decide(s, "restock", true);
+    const worker = s.people.find((p) => p.taskId)!;
+    const before = structuredClone(worker);
+    expect(
+      interact(s, { type: "walk", personId: 100, position: [-7, 6] }).ok,
+    ).toBe(false);
+    expect(
+      interact(s, { type: "walk", personId: worker.id, position: [-7, 6] }).ok,
+    ).toBe(false);
+    expect(worker).toEqual(before);
+    run(s, 4);
+    const paying = s.people.find((p) => p.stage === "paying")!;
+    expect(paying).toBeDefined();
+    const basket = structuredClone(paying.basket);
+    expect(
+      interact(s, { type: "walk", personId: paying.id, position: [-7, 6] }).ok,
+    ).toBe(false);
+    expect(paying.basket).toEqual(basket);
+    conservation(s);
+  });
+});

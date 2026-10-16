@@ -416,6 +416,8 @@ async function selectPerson(page: Page, name = "Mia") {
   await expect(
     page.getByRole("region", { name: "Person actions" }),
   ).toBeVisible();
+  const more = page.getByRole("button", { name: "More actions", exact: true });
+  if (await more.isVisible()) await more.click();
 }
 test("people have playful actions and return to their shopping after a dance", async ({
   page,
@@ -582,10 +584,122 @@ test("a tap on a 3D shopper opens the contextual person menu", async ({
   await expect(
     menu.getByRole("heading", { name: "Mia", exact: true }),
   ).toBeVisible();
+  await expect(menu.getByRole("img", { name: "Mia's portrait" })).toBeVisible();
+  await expect(
+    menu.getByText("Click the floor to walk, or a shelf to visit."),
+  ).toBeVisible();
+  const more = menu.getByRole("button", { name: "More actions", exact: true });
+  if (await more.isVisible()) await more.click();
   await expect(
     menu.getByRole("button", { name: "Wave hello", exact: true }),
   ).toBeVisible();
   const after = await canvas.boundingBox();
   expect(Math.abs(after!.height - box.height)).toBeLessThan(1);
   expect(Math.abs(after!.width - box.width)).toBeLessThan(1);
+});
+
+test("select beside a shopper, then tap the floor and a shelf to direct that same person", async ({
+  page,
+}, testInfo) => {
+  if (testInfo.project.name === "desktop")
+    await page.setViewportSize({ width: 1318, height: 836 });
+  await openStore(page);
+  await pause(page);
+  if (!(await page.locator("canvas").count()))
+    test.skip(true, "This device uses the operational fallback.");
+  await page.getByRole("button", { name: "Reset store", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Reset store", exact: true })
+    .click();
+  await page.waitForTimeout(400);
+  const canvas = page.locator("canvas"),
+    box = (await canvas.boundingBox())!;
+  const camera = new OrthographicCamera(
+    -box.width / 2,
+    box.width / 2,
+    box.height / 2,
+    -box.height / 2,
+    0.1,
+    150,
+  );
+  camera.position.set(35, 43, 45);
+  camera.lookAt(0, 0, 1.5);
+  camera.zoom = Math.min(
+    box.width / (box.width < 700 ? 59 : 58),
+    box.height / 35,
+  );
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld();
+  const tap = async (world: [number, number, number], offset = 0) => {
+    const p = new Vector3(...world).project(camera);
+    const position = {
+      x: ((p.x + 1) * box.width) / 2 + offset,
+      y: ((1 - p.y) * box.height) / 2,
+    };
+    if (testInfo.project.name === "desktop") await canvas.click({ position });
+    else await canvas.tap({ position });
+  };
+  // Deliberately miss the tiny character mesh but hit the enlarged screen-space target.
+  await tap([-14.7, 1.05, -4], 11);
+  const menu = page.getByRole("region", { name: "Person actions" });
+  await expect(
+    menu.getByRole("heading", { name: "Mia", exact: true }),
+  ).toBeVisible();
+  await expect(menu.getByRole("img", { name: "Mia's portrait" })).toBeVisible();
+  if (testInfo.project.name === "desktop") {
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - 80);
+    await page.mouse.down();
+    await page.mouse.move(
+      box.x + box.width / 2 + 30,
+      box.y + box.height / 2 - 65,
+      { steps: 8 },
+    );
+    await page.mouse.up();
+    await expect(page.getByTestId("person-activity")).toHaveText(
+      "Choosing groceries",
+    );
+    await page
+      .getByRole("button", { name: "Reset camera", exact: true })
+      .click();
+    await page.waitForTimeout(200);
+  }
+  if (testInfo.project.name !== "desktop") {
+    const panel = (await page.locator(".store-sidebar").boundingBox())!;
+    expect(panel.height).toBeLessThan(270);
+    await expect(
+      menu.getByRole("button", { name: "More actions", exact: true }),
+    ).toBeVisible();
+  }
+  await tap([-7, 0.03, -10]);
+  await expect(page.getByTestId("person-activity")).toHaveText(
+    "Walking where you pointed",
+  );
+  await expect(page.getByRole("status")).toContainText("Mia is on the way");
+  await expect(
+    menu.getByRole("heading", { name: "Mia", exact: true }),
+  ).toBeVisible();
+  await tap([0, 1.3, -6]);
+  await expect(page.getByRole("status")).toContainText(
+    "Mia is on the way to bakery",
+  );
+  await expect(page.getByTestId("person-activity")).toHaveText(
+    "Exploring the aisles",
+  );
+  await expect(
+    menu.getByRole("heading", { name: "Mia", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Play simulation", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Play simulation", exact: true })
+    .click();
+  await expect(page.getByTestId("store-clock")).not.toHaveText("09:00:00");
+  await expect(
+    menu.getByRole("heading", { name: "Mia", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: `/tmp/abc-point-click-${testInfo.project.name}.png`,
+  });
 });

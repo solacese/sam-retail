@@ -287,14 +287,14 @@ export default function App() {
     s = sim.snapshot,
     m = metrics(s),
     priorities = visibleRecommendations(s);
-  const command = (action: StoreCommand) => {
+  const command = (action: StoreCommand, focusShop = true) => {
     const result = sim.command(action);
     setNotice(
       result.message +
         (result.ok && !sim.running ? " Press Play to watch." : ""),
     );
-    if (result.ok && window.innerWidth <= 760) {
-      setSelected(null);
+    if (result.ok && focusShop && window.innerWidth <= 760) {
+      if (!selected?.startsWith("person:")) setSelected(null);
       requestAnimationFrame(() =>
         document.querySelector(".shop-stage")?.scrollIntoView({
           behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -304,6 +304,21 @@ export default function App() {
         }),
       );
     }
+  };
+  const sceneSelect = (id: string) => {
+    const person = sim.store.current.people.find(
+      (p) => selected === `person:${p.id}`,
+    );
+    if (person && DEPARTMENTS.some((d) => d.id === id)) {
+      command(
+        {
+          type: person.role === "shopper" ? "browse" : "tidy",
+          personId: person.id,
+          departmentId: id,
+        },
+        false,
+      );
+    } else setSelected(id);
   };
   const rec = s.recommendations.find((r) => r.id === decision);
   useEffect(() => {
@@ -465,7 +480,18 @@ export default function App() {
                 store={sim.store}
                 running={sim.runningRef}
                 selected={selected}
-                onSelect={setSelected}
+                onSelect={sceneSelect}
+                onFloorClick={(position) => {
+                  if (selected?.startsWith("person:"))
+                    command(
+                      {
+                        type: "walk",
+                        personId: Number(selected.split(":")[1]),
+                        position,
+                      },
+                      false,
+                    );
+                }}
                 cameraReset={cameraReset}
                 active={!panel && !decision}
               />
@@ -522,11 +548,12 @@ export default function App() {
           </div>
         </section>
         <aside
-          className={`store-sidebar${selected ? " has-selection" : ""}`}
+          className={`store-sidebar${selected ? " has-selection" : ""}${selected?.startsWith("person:") ? " has-person" : ""}`}
           aria-label="Store operations"
         >
           {selected?.startsWith("person:") ? (
             <PersonInspector
+              key={selected}
               id={Number(selected.split(":")[1])}
               state={s}
               command={command}
@@ -811,6 +838,11 @@ export default function App() {
               <li>
                 Select a department or fixture to inspect its stock, prices, and
                 status. The department list offers the same controls.
+              </li>
+              <li>
+                Select a person, then click the floor to walk there or a shelf
+                to browse or tidy it. Choose another person to switch; close
+                their panel to return to inspecting the shop.
               </li>
               <li>
                 Review a recommendation to compare its benefits and tradeoffs.

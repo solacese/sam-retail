@@ -8,10 +8,11 @@ import {
   type MutableRefObject,
   type ReactNode,
 } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, events, useFrame, useThree } from "@react-three/fiber";
 import { Billboard, OrbitControls } from "@react-three/drei";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import * as THREE from "three";
+import { hairColor } from "./PersonPortrait";
 import type { OrbitControls as Controls } from "three-stdlib";
 import {
   DEPARTMENTS,
@@ -22,6 +23,7 @@ import {
   FIXTURE_WIDTH,
   personName,
   type FloorItem,
+  type Point,
   stock,
   type StoreState,
 } from "../simulation/store";
@@ -31,6 +33,11 @@ const GREEN = "#28594a",
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const roundedGeometry = new RoundedBoxGeometry(1, 1, 1, 1, 0.1);
 const materials = new Map<string, THREE.MeshStandardMaterial>();
+function humanRoot(object: THREE.Object3D): THREE.Object3D | null {
+  let node: THREE.Object3D | null = object;
+  while (node && node.userData.personId === undefined) node = node.parent;
+  return node;
+}
 function material(color: string) {
   if (!materials.has(color))
     materials.set(
@@ -363,7 +370,9 @@ function DepartmentFixture({
   );
   return (
     <group
+      userData={{ departmentId: department.id }}
       onClick={(e) => {
+        if (e.delta > 5) return;
         e.stopPropagation();
         onSelect(department.id);
       }}
@@ -515,9 +524,7 @@ const hairDome = new THREE.SphereGeometry(
 const curlGeometry = new THREE.SphereGeometry(1, 9, 7);
 function Hair({ id }: { id: number }) {
   const style = id % 6,
-    color = ["#44332b", "#b67948", "#70503d", "#302d2a", "#c7ab75", "#93958d"][
-      Math.floor(id / 3) % 6
-    ];
+    color = hairColor(id);
   const puff = (
     at: [number, number, number],
     scale: [number, number, number],
@@ -654,6 +661,8 @@ function Human({
   onSelect: (id: string) => void;
 }) {
   const person = store.current.people.find((p) => p.id === id)!;
+  const camera = useThree((s) => s.camera);
+  const hitArea = useRef<THREE.Mesh>(null!);
   const root = useRef<THREE.Group>(null!),
     legA = useRef<THREE.Group>(null!),
     legB = useRef<THREE.Group>(null!),
@@ -690,6 +699,15 @@ function Human({
     const p = store.current.people.find((p) => p.id === id)!;
     if (!root.current) return;
     root.current.visible = p.stage !== "outside";
+    // Keep a comfortable target even when the camera is zoomed out on a phone.
+    if (hitArea.current) {
+      const zoom = (camera as THREE.OrthographicCamera).zoom;
+      hitArea.current.scale.set(
+        Math.max(1.15, 28 / zoom),
+        Math.max(2, 38 / zoom),
+        1,
+      );
+    }
     if (store.current.time < lastTime.current) {
       root.current.position.set(p.position[0], 0, p.position[1]);
       previous.current.copy(root.current.position);
@@ -766,7 +784,7 @@ function Human({
       } else if (a?.kind === "dance") {
         arm.current.rotation.x = Math.sin(idlePhase * 3) * 0.7;
         rightArm.current.rotation.x = -arm.current.rotation.x;
-      } else {
+      } else if (a && ["tidy", "cleanup"].includes(a.kind)) {
         arm.current.rotation.x = -1 + Math.sin(idlePhase * 3) * 0.3;
         rightArm.current.rotation.x = -0.85;
       }
@@ -826,6 +844,12 @@ function Human({
         document.body.style.cursor = "";
       }}
     >
+      <Billboard position={[0, 1.05, 0]}>
+        <mesh ref={hitArea} userData={{ personHitArea: true }}>
+          <planeGeometry args={[1, 1]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
+      </Billboard>
       {selected && (
         <>
           <mesh position={[0, 0.06, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -991,6 +1015,7 @@ function Human({
           </Billboard>
         )}
       {activity &&
+        activity.line &&
         activity.stage === "active" &&
         (activity.kind !== "chat" ||
           activity.people[Math.floor(activity.remaining / 2) % 2] === id) && (
@@ -1010,7 +1035,7 @@ function Human({
             />
           </Billboard>
         )}
-      {selected && !activity && (
+      {selected && (!activity || activity.kind === "walk") && (
         <Billboard position={[0, 2.8, 0]}>
           <Sign
             text={
@@ -1057,7 +1082,7 @@ function Human({
   );
 }
 function Camera({ reset }: { reset: number }) {
-  const { camera, size } = useThree();
+  const { camera, size, invalidate } = useThree();
   const controls = useRef<Controls>(null!);
   useEffect(() => {
     const scale = Math.min(
@@ -1068,11 +1093,12 @@ function Camera({ reset }: { reset: number }) {
     camera.position.set(35, 43, 45);
     camera.lookAt(0, 0, 1.5);
     camera.updateProjectionMatrix();
+    invalidate();
     if (controls.current) {
       controls.current.target.set(0, 0, 1.5);
       controls.current.update();
     }
-  }, [camera, reset, size.width, size.height]);
+  }, [camera, reset, size.width, size.height, invalidate]);
   return (
     <OrbitControls
       ref={controls}
@@ -1192,6 +1218,7 @@ function World({
   reduced,
   selected,
   onSelect,
+  onFloorClick,
 }: {
   state: StoreState;
   store: MutableRefObject<StoreState>;
@@ -1199,35 +1226,68 @@ function World({
   reduced: boolean;
   selected: string | null;
   onSelect: (id: string) => void;
+  onFloorClick: (position: Point) => void;
 }) {
+  const person = state.people.find((p) => selected === `person:${p.id}`);
+  const destination = person?.destination;
   return (
     <group>
-      <SoftBox
-        at={[0, -0.45, 0]}
-        size={[FLOOR.width, 0.8, FLOOR.depth]}
-        color="#d5c9ad"
-      />
-      <Box
-        at={[0, -0.03, 0]}
-        size={[FLOOR.width - 0.6, 0.12, FLOOR.depth - 0.6]}
-        color="#f0e7d1"
-      />
-      {Array.from({ length: 21 }, (_, i) => (
-        <Box
-          key={`x${i}`}
-          at={[-20 + i * 2, 0.04, 0]}
-          size={[0.018, 0.006, 35.5]}
-          color="#ddd2bb"
+      <group
+        onClick={(e) => {
+          if (e.delta > 5) return;
+          e.stopPropagation();
+          onFloorClick([e.point.x, e.point.z]);
+        }}
+      >
+        <SoftBox
+          at={[0, -0.45, 0]}
+          size={[FLOOR.width, 0.8, FLOOR.depth]}
+          color="#d5c9ad"
         />
-      ))}
-      {Array.from({ length: 19 }, (_, i) => (
         <Box
-          key={`z${i}`}
-          at={[0, 0.04, -18 + i * 2]}
-          size={[41.5, 0.006, 0.018]}
-          color="#ddd2bb"
+          at={[0, -0.03, 0]}
+          size={[FLOOR.width - 0.6, 0.12, FLOOR.depth - 0.6]}
+          color="#f0e7d1"
         />
-      ))}
+        {Array.from({ length: 21 }, (_, i) => (
+          <Box
+            key={`x${i}`}
+            at={[-20 + i * 2, 0.04, 0]}
+            size={[0.018, 0.006, 35.5]}
+            color="#ddd2bb"
+          />
+        ))}
+        {Array.from({ length: 19 }, (_, i) => (
+          <Box
+            key={`z${i}`}
+            at={[0, 0.04, -18 + i * 2]}
+            size={[41.5, 0.006, 0.018]}
+            color="#ddd2bb"
+          />
+        ))}
+      </group>
+      {destination && person.stage !== "outside" && (
+        <group position={[destination[0], 0.09, destination[1]]}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.48, 0.6, 32]} />
+            <meshBasicMaterial
+              color="#347f5e"
+              transparent
+              opacity={0.8}
+              depthWrite={false}
+            />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[0.18, 20]} />
+            <meshBasicMaterial
+              color="#347f5e"
+              transparent
+              opacity={0.7}
+              depthWrite={false}
+            />
+          </mesh>
+        </group>
+      )}
       {/* Low cutaway walls keep the backroom visible at every supported camera angle. */}
       <Box at={[0, 0.26, -17.8]} size={[42, 0.52, 0.28]} color="#c3ceb7" />
       <Box at={[-20.8, 0.18, 0]} size={[0.28, 0.36, 36]} color="#d2d8bc" />
@@ -1432,6 +1492,7 @@ export default function StoreScene({
   running,
   selected,
   onSelect,
+  onFloorClick,
   cameraReset,
   active,
 }: {
@@ -1440,9 +1501,12 @@ export default function StoreScene({
   running: MutableRefObject<boolean>;
   selected: string | null;
   onSelect: (id: string) => void;
+  onFloorClick: (position: Point) => void;
   cameraReset: number;
   active: boolean;
 }) {
+  const selection = useRef(selected);
+  selection.current = selected;
   const [reduced, setReduced] = useState(
     () => matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
@@ -1472,6 +1536,64 @@ export default function StoreScene({
           fallback={<div className="scene-loading">Opening your store…</div>}
         >
           <Canvas
+            events={(rootStore) => ({
+              ...events(rootStore),
+              filter: (hits) => {
+                const state = rootStore.getState();
+                hits = hits.filter(
+                  (hit) => humanRoot(hit.object)?.visible !== false,
+                );
+                if (selection.current?.startsWith("person:")) {
+                  let fixture =
+                    hits.find((hit) => !hit.object.userData.personHitArea)
+                      ?.object ?? null;
+                  while (fixture && !fixture.userData.departmentId)
+                    fixture = fixture.parent;
+                  // Once directing someone, a shelf tap is an order rather than a near miss on its neighbour.
+                  if (fixture)
+                    return hits.filter(
+                      (hit) => !hit.object.userData.personHitArea,
+                    );
+                }
+                // A generous target must never steal a click on a neighbour's visible body.
+                const body = hits.find(
+                  (hit) =>
+                    !hit.object.userData.personHitArea && humanRoot(hit.object),
+                );
+                let chosen = body && humanRoot(body.object);
+                if (!chosen) {
+                  let closest = Infinity;
+                  for (const hit of hits.filter(
+                    (hit) => hit.object.userData.personHitArea,
+                  )) {
+                    const root = humanRoot(hit.object)!;
+                    const centre = root
+                      .localToWorld(new THREE.Vector3(0, 1.05, 0))
+                      .project(state.camera);
+                    const distance = Math.hypot(
+                      (centre.x - state.pointer.x) * state.size.width,
+                      (centre.y - state.pointer.y) * state.size.height,
+                    );
+                    if (distance < closest) {
+                      closest = distance;
+                      chosen = root;
+                    }
+                  }
+                }
+                const filtered = hits.filter(
+                  (hit) =>
+                    !hit.object.userData.personHitArea ||
+                    humanRoot(hit.object) === chosen,
+                );
+                // Near misses count as a person click too, even beside a display edge.
+                const target = filtered.find(
+                  (hit) => hit.object.userData.personHitArea,
+                );
+                return target
+                  ? [target, ...filtered.filter((hit) => hit !== target)]
+                  : filtered;
+              },
+            })}
             orthographic
             frameloop={running.current && active ? "always" : "demand"}
             shadows={!small}
@@ -1507,6 +1629,7 @@ export default function StoreScene({
               reduced={reduced}
               selected={selected}
               onSelect={onSelect}
+              onFloorClick={onFloorClick}
             />
             <Camera reset={cameraReset} />
           </Canvas>

@@ -7,14 +7,18 @@ import {
   ShoppingBasket,
   Brush,
   PackageOpen,
+  MousePointer2,
+  ChevronDown,
 } from "lucide-react";
 import {
   DEPARTMENTS,
   personName,
   personActivity,
+  canDirectPerson,
   type StoreCommand,
   type StoreState,
 } from "../simulation/store";
+import { PersonPortrait } from "./PersonPortrait";
 type Command = (command: StoreCommand) => void;
 export function PersonInspector({
   id,
@@ -29,6 +33,7 @@ export function PersonInspector({
 }) {
   const p = state.people.find((p) => p.id === id)!;
   const [department, setDepartment] = useState("bakery");
+  const [expanded, setExpanded] = useState(false);
   const active = state.activities.find((a) => a.id === p.activityId);
   const busy =
     !!p.taskId ||
@@ -36,9 +41,12 @@ export function PersonInspector({
     !["shopping", "picking", "entering", "working"].includes(p.stage) ||
     (p.role === "employee" && p.id < 102);
   return (
-    <section className="inspector person-inspector" aria-label="Person actions">
+    <section
+      className={`inspector person-inspector${expanded ? " expanded" : ""}`}
+      aria-label="Person actions"
+    >
       <div className="section-heading">
-        <span className="eyebrow">A LITTLE SHOP LIFE</span>
+        <span className="eyebrow">YOUR SELECTED PERSON</span>
         <button
           className="icon-button"
           aria-label="Close inspector"
@@ -48,9 +56,7 @@ export function PersonInspector({
         </button>
       </div>
       <div className="person-identity">
-        <span className="person-avatar" style={{ background: p.outfit }}>
-          <span style={{ background: p.skin }} />
-        </span>
+        <PersonPortrait person={p} />
         <div>
           <h2>{personName(p)}</h2>
           <span>
@@ -59,93 +65,109 @@ export function PersonInspector({
           </span>
         </div>
       </div>
+      <p className="person-point-hint">
+        <MousePointer2 size={16} />
+        {canDirectPerson(p)
+          ? "Click the floor to walk, or a shelf to visit."
+          : "Finishing a job. You can still wave hello."}
+      </p>
       <p className="person-current" data-testid="person-activity">
         {personActivity(state, p)}
       </p>
-      {active?.stage === "active" && (
-        <p className="person-quote">“{active.line}”</p>
-      )}
-      <div className="person-actions">
-        <button
-          onClick={() => command({ type: "wave", personId: id })}
-          disabled={p.stage === "outside"}
-        >
-          <Hand size={17} />
-          <span>Wave hello</span>
-        </button>
-        <button
-          onClick={() => command({ type: "chat", personId: id })}
-          disabled={busy}
-        >
-          <MessageCircle size={17} />
-          <span>
-            {p.role === "employee"
-              ? "Have a friendly chat"
-              : "Say hello to someone"}
-          </span>
-        </button>
-        <button
-          onClick={() => command({ type: "dance", personId: id })}
-          disabled={busy}
-        >
-          <Sparkles size={17} />
-          <span>Do a happy dance</span>
-        </button>
-      </div>
-      <label className="person-destination">
-        {p.role === "shopper" ? "Explore an aisle" : "Care for a display"}
-        <select
-          aria-label="Choose an aisle"
-          value={department}
-          onChange={(e) => setDepartment(e.target.value)}
-        >
-          {DEPARTMENTS.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
-      </label>
       <button
-        className="secondary person-go"
-        disabled={busy}
-        onClick={() =>
-          command(
-            p.role === "shopper"
-              ? { type: "browse", personId: id, departmentId: department }
-              : { type: "tidy", personId: id, departmentId: department },
-          )
-        }
+        className="person-more"
+        aria-expanded={expanded}
+        onClick={() => setExpanded(!expanded)}
       >
-        {p.role === "shopper" ? (
-          <ShoppingBasket size={16} />
-        ) : (
-          <Brush size={16} />
-        )}
-        {p.role === "shopper" ? "Go browse this aisle" : "Tidy this display"}
+        {expanded ? "Back to the shop" : "More actions"}
+        <ChevronDown size={16} />
       </button>
-      {busy && (
-        <p className="fine-print">
-          Let them finish this little moment. You can still wave hello.
-        </p>
-      )}
-      {p.role === "shopper" && (
-        <div className="person-basket">
-          <span className="eyebrow">
-            IN THE BASKET · {p.basket.reduce((n, l) => n + l.quantity, 0)}
-          </span>
-          <p>
-            {p.basket.length
-              ? p.basket
-                  .map(
-                    (l) =>
-                      state.products.find((v) => v.id === l.productId)!.name,
-                  )
-                  .join(", ")
-              : "A fresh basket, ready for good finds."}
-          </p>
+      <div className="person-extra">
+        {active?.stage === "active" && active.line && (
+          <p className="person-quote">“{active.line}”</p>
+        )}
+        <div className="person-actions">
+          <button
+            onClick={() => command({ type: "wave", personId: id })}
+            disabled={p.stage === "outside"}
+          >
+            <Hand size={17} />
+            <span>Wave hello</span>
+          </button>
+          <button
+            onClick={() => command({ type: "chat", personId: id })}
+            disabled={busy}
+          >
+            <MessageCircle size={17} />
+            <span>
+              {p.role === "employee"
+                ? "Have a friendly chat"
+                : "Say hello to someone"}
+            </span>
+          </button>
+          <button
+            onClick={() => command({ type: "dance", personId: id })}
+            disabled={busy}
+          >
+            <Sparkles size={17} />
+            <span>Do a happy dance</span>
+          </button>
         </div>
-      )}
+        <label className="person-destination">
+          {p.role === "shopper" ? "Explore an aisle" : "Care for a display"}
+          <select
+            aria-label="Choose an aisle"
+            value={department}
+            onChange={(e) => setDepartment(e.target.value)}
+          >
+            {DEPARTMENTS.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          className="secondary person-go"
+          disabled={!canDirectPerson(p)}
+          onClick={() =>
+            command(
+              p.role === "shopper"
+                ? { type: "browse", personId: id, departmentId: department }
+                : { type: "tidy", personId: id, departmentId: department },
+            )
+          }
+        >
+          {p.role === "shopper" ? (
+            <ShoppingBasket size={16} />
+          ) : (
+            <Brush size={16} />
+          )}
+          {p.role === "shopper" ? "Go browse this aisle" : "Tidy this display"}
+        </button>
+        {busy && !canDirectPerson(p) && (
+          <p className="fine-print">
+            Let them finish this little moment. You can still wave hello.
+          </p>
+        )}
+        {p.role === "shopper" && (
+          <div className="person-basket">
+            <span className="eyebrow">
+              IN THE BASKET · {p.basket.reduce((n, l) => n + l.quantity, 0)}
+            </span>
+            <p>
+              {p.basket.length
+                ? p.basket
+                    .map(
+                      (l) =>
+                        state.products.find((v) => v.id === l.productId)!.name,
+                    )
+                    .join(", ")
+                : "A fresh basket, ready for good finds."}
+            </p>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

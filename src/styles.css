@@ -2335,21 +2335,6 @@ button:hover:not(:disabled) {
   font-size: 11px;
   color: #829078;
 }
-.person-avatar {
-  width: 44px;
-  height: 49px;
-  border-radius: 17px 17px 11px 11px;
-  display: grid;
-  place-items: start center;
-  padding-top: 5px;
-  flex-shrink: 0;
-}
-.person-avatar > span {
-  width: 27px;
-  height: 29px;
-  border-radius: 45%;
-  border-top: 6px solid #574437;
-}
 .person-current {
   background: #e9eedf;
   border-radius: 8px;
@@ -2560,5 +2545,80 @@ button:hover:not(:disabled) {
   .store-sidebar {
     min-height: 0;
     max-height: 100%;
+  }
+}
+
+/* Point-and-click selection stays small enough to leave the shop playable. */
+.person-portrait {
+  width: 76px;
+  height: 82px;
+  flex-shrink: 0;
+}
+.person-point-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #42684f;
+}
+.person-point-hint svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.person-more {
+  display: none;
+}
+@media (max-width: 760px) {
+  .store-sidebar.has-person {
+    padding: 12px 18px max(12px, env(safe-area-inset-bottom));
+  }
+  .person-inspector .section-heading {
+    margin-bottom: 0;
+  }
+  .person-inspector .section-heading .eyebrow {
+    font-size: 10px;
+  }
+  .person-identity {
+    margin: 3px 0 8px;
+    gap: 12px;
+  }
+  .person-identity h2 {
+    font-size: 25px;
+  }
+  .person-portrait {
+    width: 58px;
+    height: 63px;
+  }
+  .person-point-hint {
+    margin: 4px 0 7px;
+    font-size: 13px;
+  }
+  .person-current {
+    margin: 0;
+    padding: 7px 10px;
+    font-size: 13px;
+  }
+  .person-more {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    min-height: 36px;
+    background: transparent;
+    border: 0;
+    font-size: 12px;
+    color: #547349;
+    margin-top: 3px;
+  }
+  .person-extra {
+    display: none;
+  }
+  .person-inspector.expanded .person-extra {
+    display: block;
+  }
+  .person-inspector.expanded .person-more svg {
+    transform: rotate(180deg);
   }
 }
