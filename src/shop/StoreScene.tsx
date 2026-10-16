@@ -853,6 +853,15 @@ function Human({
       1.39 + (gesture && !walking ? Math.sin(idlePhase * 0.6) * 0.013 : 0);
     head.current.rotation.z =
       gesture && p.stage === "picking" ? -0.12 + Math.sin(idlePhase) * 0.07 : 0;
+    if (
+      gesture &&
+      (p.mischiefUntil ?? 0) > store.current.time &&
+      (p.reaction?.text.includes("butterfingers") ||
+        p.reaction?.text.includes("Just here"))
+    ) {
+      rightArm.current.rotation.x = -0.9;
+      head.current.rotation.z = -0.16;
+    }
     head.current.rotation.y =
       gesture && p.stage === "queueing" ? Math.sin(idlePhase * 0.5) * 0.16 : 0;
     eyes.current.scale.y =

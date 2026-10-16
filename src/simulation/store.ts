@@ -100,6 +100,9 @@ export interface Person {
   };
   reaction?: { text: string; until: number };
   securityCaseId?: number;
+  exitAttempt?: boolean;
+  securityVisited?: boolean;
+  mischiefUntil?: number;
   position: Point;
   route: Point[];
   destination: Point | null;
@@ -179,6 +182,7 @@ export interface SecurityCase {
   kind: "receipt" | "bag" | "clear";
   shopperId: number;
   transactionId: number;
+  origin?: "exit-attempt";
   stage: "waiting" | "approaching" | "checking" | "resolved";
   at: number;
   timer: number;
@@ -194,6 +198,7 @@ export interface StoreActivity {
   startedAt: number;
   deadline: number;
   line: string;
+  followUp?: "promotion";
 }
 export interface FloorItem {
   id: number;
@@ -207,6 +212,8 @@ export interface FloorItem {
 export type StoreCommand =
   | { type: "promotion"; promotion: Promotion }
   | { type: "help-need"; personId: number }
+  | { type: "drop-basket"; personId: number }
+  | { type: "attempt-unpaid"; personId: number }
   | { type: "security-check"; caseId: number }
   | { type: "security-checkout"; caseId: number }
   | { type: "walk"; personId: number; position: Point }
@@ -230,6 +237,8 @@ export interface StoreState {
   promotion: Promotion;
   needsHelped: number;
   nextNeedAt: number;
+  nextEmergentAt: number;
+  emergentRound: number;
   securityCases: SecurityCase[];
   nextSecurityAt: number;
   securityCompleted: number;
@@ -413,7 +422,34 @@ export function routeBetween(
           (PERSON_SPACING + 0.05) ** 2
         )
           taken.add(`${x},${z}`);
-  if (taken.has(key(to)) || blocked(to[0] / 2, to[1] / 2)) return [];
+  // A clear destination can round onto an occupied grid cell (especially beside
+  // a queue). Connect both exact endpoints to a genuinely reachable grid node.
+  for (const [node, endpoint] of [
+    [from, start],
+    [to, end],
+  ] as const) {
+    const candidates: Point[] = [];
+    for (let x = node[0] - 2; x <= node[0] + 2; x++)
+      for (let z = node[1] - 2; z <= node[1] + 2; z++) {
+        const point: Point = [x / 2, z / 2];
+        if (
+          !blocked(...point) &&
+          !taken.has(`${x},${z}`) &&
+          !crossesFixture(endpoint, point) &&
+          occupied.every(
+            (p) => segmentDistance(p, endpoint, point) >= PERSON_SPACING + 0.04,
+          )
+        )
+          candidates.push([x, z]);
+      }
+    candidates.sort(
+      (a, b) =>
+        Math.hypot(a[0] / 2 - endpoint[0], a[1] / 2 - endpoint[1]) -
+        Math.hypot(b[0] / 2 - endpoint[0], b[1] / 2 - endpoint[1]),
+    );
+    if (!candidates.length) return [];
+    [node[0], node[1]] = candidates[0];
+  }
   const dx = end[0] - start[0],
     dz = end[1] - start[1],
     forward: Point =
@@ -647,6 +683,8 @@ export function createStore(seed = 2401): StoreState {
     promotion: "welcome",
     needsHelped: 0,
     nextNeedAt: 35,
+    nextEmergentAt: 36,
+    emergentRound: 0,
     securityCases: [],
     nextSecurityAt: 0,
     securityCompleted: 0,
@@ -1276,6 +1314,10 @@ export function advance(s: StoreState, dt: number) {
       continue;
     }
     if (travelling(p)) continue;
+    if (p.exitAttempt) {
+      if (!activeSecurityCase(s)) detectExitAttempt(s, p);
+      continue;
+    }
     p.timer -= dt;
     if (p.stage === "entering" && p.timer <= 0) shopNext(s, p);
     else if (p.stage === "shopping") {
@@ -1328,6 +1370,13 @@ export function advance(s: StoreState, dt: number) {
     } else if (p.stage === "leaving") {
       p.stage = "outside";
       p.timer = 3 + (p.id % 5);
+      emit(
+        s,
+        "iot",
+        "camera/exit/departed",
+        `${personName(p)} left the store. Have a lovely day!`,
+        "entrance",
+      );
     } else if (p.stage === "outside" && p.timer <= 0) {
       if (
         otherPeople(s, p).some(
@@ -1350,6 +1399,8 @@ export function advance(s: StoreState, dt: number) {
       p.visited = 0;
       p.list = shoppingList(s, p.id);
       p.need = undefined;
+      p.securityVisited = false;
+      p.exitAttempt = false;
       p.stage = "entering";
       p.timer = 0.5;
       emit(
@@ -1369,8 +1420,8 @@ export function advance(s: StoreState, dt: number) {
       .sort((a, b) => a.queueSince - b.queueSince || a.id - b.id);
     queue.forEach((p, n) => {
       const target: Point = [
-        TILLS[i][0] + 1.8 + (n >= 4 ? 1.3 : 0),
-        TILLS[i][1] + 1.6 + Math.min(n, 7 - n) * 1.16,
+        TILLS[i][0] + 2.5 + Math.floor(n / 4) * 1.5,
+        TILLS[i][1] + 2 + (Math.floor(n / 4) % 2 ? 3 - (n % 4) : n % 4) * 1.5,
       ];
       if (
         !p.destination ||
@@ -1388,7 +1439,7 @@ export function advance(s: StoreState, dt: number) {
       if (s.queueSamples.length > 100) s.queueSamples.shift();
       queue[0].stage = "paying";
       queue[0].timer = 4;
-      go(s, queue[0], [TILLS[i][0] + 1.8, TILLS[i][1] + 0.3], true);
+      go(s, queue[0], [TILLS[i][0] + 2.5, TILLS[i][1]], true);
       emit(
         s,
         "operations",
@@ -1415,11 +1466,19 @@ export function advance(s: StoreState, dt: number) {
         p.checkout = 2;
         p.route = [];
         p.destination = null;
+        emit(
+          s,
+          "operations",
+          `checkout/queue/${p.id}/rerouted`,
+          `${personName(p)} is moving to the shorter queue at checkout 3.`,
+          "checkouts",
+        );
       }
     }
   }
   securityStep(s, dt);
   needStep(s);
+  emergentStep(s);
   dispatchWork(s);
   ambientStep(s);
   for (const b of s.batches)
@@ -1606,6 +1665,7 @@ export function personName(p: Person) {
     : STAFF_NAMES[(p.id - 100) % STAFF_NAMES.length];
 }
 export function personActivity(s: StoreState, p: Person) {
+  if (p.exitAttempt) return "Heading to the exit with an unpaid basket";
   if (p.securityCaseId)
     return p.job === "security"
       ? "Helping with a friendly receipt check"
@@ -1769,6 +1829,32 @@ function finishActivity(s: StoreState, a: StoreActivity, cancelled = false) {
       p.need.status = "helping";
       p.list.splice(p.visited, 0, p.need.productId);
     }
+    if (
+      !cancelled &&
+      a.followUp === "promotion" &&
+      p.role === "shopper" &&
+      p.list.length < 10 &&
+      s.promotion !== "welcome"
+    ) {
+      const product = s.products.find(
+        (v) =>
+          (s.promotion === "bakery"
+            ? v.department === "bakery"
+            : ["sku-6", "sku-11", "sku-16"].includes(v.id)) &&
+          stock(s, v.id).shelf > 0,
+      );
+      if (product) {
+        p.list.splice(p.visited, 0, product.id);
+        p.reaction = { text: "Let's try that deal!", until: s.time + 5 };
+        emit(
+          s,
+          "operations",
+          `promotion/word-of-mouth/${p.id}/responded`,
+          `${personName(p)} heard about the offer and is heading to ${product.name.toLowerCase()}.`,
+          `person:${p.id}`,
+        );
+      }
+    }
     if (p.role === "shopper") shopNext(s, p);
     else {
       p.stage = "working";
@@ -1881,6 +1967,13 @@ function startChat(s: StoreState, p: Person, nearbyOnly = false) {
     lines[Math.floor(random(s) * lines.length)],
   );
   if (!a) return false;
+  if (s.promotion !== "welcome" && random(s) < 0.5) {
+    a.followUp = "promotion";
+    a.line =
+      s.promotion === "bakery"
+        ? "Did you see those bakery treats?"
+        : "Fancy the lunch deal?";
+  }
   go(s, p, spot, true);
   return true;
 }
@@ -1958,6 +2051,189 @@ function requestCleanup(s: StoreState, item: FloorItem) {
   );
   return true;
 }
+function dropBasketItem(
+  s: StoreState,
+  p: Person | undefined,
+  spontaneous = false,
+) {
+  if (
+    !p ||
+    p.role !== "shopper" ||
+    !canDirectPerson(p) ||
+    !p.basket.length ||
+    (p.mischiefUntil ?? 0) > s.time
+  )
+    return {
+      ok: false,
+      message: "Choose a shopper with groceries and a little free time.",
+    };
+  if (s.floorItems.filter((i) => i.status !== "cleared").length >= 2)
+    return {
+      ok: false,
+      message: "Let the team finish the current tidy-ups first.",
+    };
+  const spot = [
+    [0.8, 0.8],
+    [-0.8, 0.8],
+    [0.8, -0.8],
+    [0, 0],
+  ]
+    .map(([x, z]) => [p.position[0] + x, p.position[1] + z] as Point)
+    .find((point) => !blocked(...point));
+  if (!spot) return { ok: false, message: "Move into an open aisle first." };
+  const line = p.basket[0],
+    batch = s.batches.find((b) => b.id === line.batchId)!,
+    product = s.products.find((v) => v.id === line.productId)!;
+  batch.inBaskets--;
+  batch.onFloor++;
+  line.quantity--;
+  p.basket = p.basket.filter((l) => l.quantity > 0);
+  const item: FloorItem = {
+    id: s.nextFloorItem++,
+    batchId: batch.id,
+    productId: product.id,
+    position: spot,
+    at: s.time,
+    status: "waiting",
+  };
+  s.floorItems.push(item);
+  p.mischiefUntil = s.time + 6;
+  p.reaction = {
+    text: spontaneous ? "Oops, butterfingers!" : "Just here for a moment…",
+    until: s.time + 5,
+  };
+  emit(
+    s,
+    "operations",
+    `people/${p.id}/basket/item-placed`,
+    `${personName(p)} ${spontaneous ? "dropped" : "put down"} ${product.name.toLowerCase()} from their basket.`,
+    `person:${p.id}`,
+  );
+  emit(
+    s,
+    "inventory",
+    `stock/${product.id}/floor-updated`,
+    "One unit moved from basket stock to the floor. The basket and inventory agree.",
+    product.department,
+  );
+  emit(
+    s,
+    "iot",
+    `smartstore/floor/${item.id}/detected`,
+    `${product.name} detected on the floor; a real stock unit is waiting for cleanup.`,
+    `floor:${item.id}`,
+  );
+  return {
+    ok: true,
+    message: `${personName(p)} put ${product.name.toLowerCase()} on the floor. Watch the tidy-up crew.`,
+  };
+}
+function attemptUnpaidExit(
+  s: StoreState,
+  p: Person | undefined,
+  spontaneous = false,
+) {
+  if (
+    !p ||
+    p.role !== "shopper" ||
+    !canDirectPerson(p) ||
+    !p.basket.length ||
+    (p.mischiefUntil ?? 0) > s.time
+  )
+    return {
+      ok: false,
+      message: "Choose a browsing shopper with an unpaid basket.",
+    };
+  if (activeSecurityCase(s) || s.people.some((p) => p.exitAttempt))
+    return {
+      ok: false,
+      message: "Rémi is helping someone. Try again after this little check.",
+    };
+  prepareDirection(s, p);
+  p.stage = "leaving";
+  p.exitAttempt = true;
+  p.mischiefUntil = s.time + 6;
+  p.reaction = { text: "Nothing to see here…", until: s.time + 75 };
+  go(s, p, RECEIPT_POINT);
+  emit(
+    s,
+    "operations",
+    `people/${p.id}/exit-attempt/started`,
+    `${personName(p)} ${spontaneous ? "spontaneously tried" : "was told to try"} heading to the exit with an unpaid basket.`,
+    `person:${p.id}`,
+  );
+  return {
+    ok: true,
+    message: `${personName(p)} is heading to the exit. Watch the sensors and Rémi respond.`,
+  };
+}
+function detectExitAttempt(s: StoreState, p: Person) {
+  const c: SecurityCase = {
+    id: s.securityCompleted + 1,
+    kind: "receipt",
+    origin: "exit-attempt",
+    shopperId: p.id,
+    transactionId: 0,
+    stage: "waiting",
+    at: s.time,
+    timer: 3,
+  };
+  s.securityCases.push(c);
+  p.exitAttempt = false;
+  p.securityCaseId = c.id;
+  p.securityVisited = true;
+  p.reaction = { text: "Oh! Hello, Rémi!", until: s.time + 75 };
+  emit(
+    s,
+    "iot",
+    `camera/exit/unpaid/${p.id}/detected`,
+    `${personName(p)} reached the exit with ${p.basket.reduce((n, l) => n + l.quantity, 0)} unpaid items. The exit sensor flagged the basket.`,
+    "security",
+  );
+  emit(
+    s,
+    "agents",
+    `security/case/${c.id}/correlated`,
+    "Exit, basket and purchase events correlated: no matching payment. Rémi has the evidence.",
+    "security",
+  );
+  checkReceipt(s, c);
+}
+function emergentStep(s: StoreState) {
+  s.nextEmergentAt ??= s.time + 36;
+  s.emergentRound ??= 0;
+  if (s.time < s.nextEmergentAt) return;
+  s.nextEmergentAt = s.time + 18 + random(s) * 10;
+  const kind = s.emergentRound++ % 4;
+  const shoppers = s.people.filter((p) => p.role === "shopper" && canPlay(p));
+  if (kind === 0) {
+    const p = shoppers.find(
+      (p) => p.basket.length && (p.mischiefUntil ?? 0) <= s.time,
+    );
+    if (p) dropBasketItem(s, p, true);
+  } else if (kind === 1) {
+    const p = shoppers.find(
+      (p) =>
+        p.need?.status === "waiting" &&
+        s.people.some(
+          (v) =>
+            v.role === "employee" &&
+            canPlay(v) &&
+            Math.hypot(
+              v.position[0] - p.position[0],
+              v.position[1] - p.position[1],
+            ) < 6,
+        ),
+    );
+    if (p) helpNeed(s, p);
+  } else if (kind === 2 && s.promotion !== "welcome") {
+    if (shoppers.length) startChat(s, shoppers[0], true);
+  } else if (kind === 3 && s.time >= s.nextSecurityAt) {
+    const p = shoppers.find((p) => p.basket.length && !p.securityVisited);
+    if (p) attemptUnpaidExit(s, p, true);
+  }
+}
+
 export function needText(p: Person) {
   return p.need?.kind === "coffee"
     ? "Where's the coffee?"
@@ -2116,6 +2392,8 @@ function needStep(s: StoreState) {
 function leaveCheckout(s: StoreState, p: Person) {
   const eligible =
     !activeSecurityCase(s) &&
+    !s.people.some((p) => p.exitAttempt) &&
+    !p.securityVisited &&
     s.time >= s.nextSecurityAt &&
     p.basket.reduce((n, l) => n + l.quantity, 0) >= 2;
   const kind: SecurityCase["kind"] = ["receipt", "bag", "clear"][
@@ -2147,6 +2425,7 @@ function leaveCheckout(s: StoreState, p: Person) {
   };
   s.securityCases.push(c);
   p.securityCaseId = c.id;
+  p.securityVisited = true;
   p.reaction = {
     text:
       kind === "bag"
@@ -2194,7 +2473,9 @@ function finishSecurity(s: StoreState, c: SecurityCase, checkout = false) {
   c.outcome = checkout
     ? "Shopper guided back to a staffed checkout."
     : c.kind === "receipt"
-      ? "Missed item paid on Rémi's handheld. All sorted!"
+      ? c.origin === "exit-attempt"
+        ? "Unpaid basket paid on Rémi's handheld. All sorted!"
+        : "Missed item paid on Rémi's handheld. All sorted!"
       : c.kind === "bag"
         ? "Forgotten paid bag returned. A happy goodbye!"
         : "All items paid. Thank you, and have a lovely day!";
@@ -2272,6 +2553,8 @@ export function interact(
       : undefined;
   if (command.type === "promotion") return promote(s, command.promotion);
   if (command.type === "help-need") return helpNeed(s, p);
+  if (command.type === "drop-basket") return dropBasketItem(s, p);
+  if (command.type === "attempt-unpaid") return attemptUnpaidExit(s, p);
   if (
     command.type === "security-check" ||
     command.type === "security-checkout"

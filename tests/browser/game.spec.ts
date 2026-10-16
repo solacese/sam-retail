@@ -892,3 +892,91 @@ test("the security guard walks over and settles a missed item only once", async 
       .filter({ hasText: "purchase/assisted/completed" }),
   ).toHaveCount(1);
 });
+
+test("a selected shopper can put a real basket item on the floor", async ({
+  page,
+}, testInfo) => {
+  await resetPausedStore(page);
+  await selectPerson(page, "Inès");
+  await expect(page.locator(".person-basket")).toContainText(
+    "IN THE BASKET · 2",
+  );
+  await page
+    .getByRole("button", { name: "Put one basket item down", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText("on the floor");
+  await expect(page.locator(".person-basket")).toContainText(
+    "IN THE BASKET · 1",
+  );
+  await expect(
+    page.getByRole("button", { name: "Put one basket item down", exact: true }),
+  ).toBeDisabled();
+  await page.screenshot({
+    path: `/tmp/abc-basket-drop-${testInfo.project.name}.png`,
+  });
+  await page
+    .getByRole("button", { name: "Close inspector", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Events", exact: true }).click();
+  await page.getByRole("button", { name: "Inventory", exact: true }).click();
+  await expect(
+    page.locator(".stream-event").filter({ hasText: "floor-updated" }),
+  ).toHaveCount(1);
+  await page.getByRole("button", { name: "IoT", exact: true }).click();
+  await expect(
+    page.locator(".stream-event").filter({ hasText: "detected on the floor" }),
+  ).toHaveCount(1);
+});
+
+test("an unpaid exit reaches the sensor and the guard resolves the actual basket", async ({
+  page,
+}, testInfo) => {
+  await resetPausedStore(page);
+  await selectPerson(page, "Inès");
+  await page
+    .getByRole("button", { name: "Try leaving without paying", exact: true })
+    .click();
+  await expect(page.getByTestId("person-activity")).toContainText(
+    "unpaid basket",
+  );
+  await page
+    .getByRole("button", { name: "Close inspector", exact: true })
+    .click();
+  const pulse = page.getByRole("complementary", {
+    name: "Live store information",
+  });
+  await pulse
+    .getByRole("combobox", { name: "Filter live events" })
+    .selectOption("operations");
+  await page.getByRole("button", { name: "2×", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Play simulation", exact: true })
+    .click();
+  await expect(
+    pulse
+      .locator(".pulse-event")
+      .filter({ hasText: "Unpaid basket paid on Rémi's handheld" }),
+  ).toBeVisible({ timeout: 35000 });
+  await pause(page);
+  await page.getByRole("button", { name: "Security", exact: true }).click();
+  await expect(page.locator(".life-outcome")).toContainText("All sorted!");
+  await page.screenshot({
+    path: `/tmp/abc-unpaid-exit-${testInfo.project.name}.png`,
+  });
+  await page
+    .getByRole("button", { name: "Close inspector", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Events", exact: true }).click();
+  await page.getByRole("button", { name: "IoT", exact: true }).click();
+  await expect(
+    page
+      .locator(".stream-event")
+      .filter({ hasText: "camera/exit/unpaid/8/detected" }),
+  ).toHaveCount(1);
+  await page.getByRole("button", { name: "Purchases", exact: true }).click();
+  await expect(
+    page
+      .locator(".stream-event")
+      .filter({ hasText: "purchase/assisted/completed" }),
+  ).toHaveCount(1);
+});

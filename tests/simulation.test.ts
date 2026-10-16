@@ -209,6 +209,7 @@ describe("retailer outcomes", () => {
       extra = createStore();
     // Isolate service capacity: receipt-check stories change return-visit arrival times.
     baseline.nextSecurityAt = extra.nextSecurityAt = Infinity;
+    baseline.nextEmergentAt = extra.nextEmergentAt = Infinity;
     decide(extra, "checkout", true);
     run(baseline, 90);
     run(extra, 90);
@@ -233,6 +234,47 @@ describe("retailer outcomes", () => {
 });
 
 describe("shop-floor movement and manager priorities", () => {
+  it("keeps payments and departures flowing for ten minutes without a checkout deadlock", () => {
+    for (const [seed, promotion] of [
+      [42, "lunch"],
+      [2401, "lunch"],
+      [991, "lunch"],
+      [2401, "welcome"],
+      [2401, "bakery"],
+    ] as const) {
+      const s = createStore(seed);
+      interact(s, { type: "promotion", promotion });
+      const payingFor = new Map<number, number>();
+      let previousTransactions = 0,
+        departures = 0;
+      for (let tick = 0; tick < 6000; tick++) {
+        const stages = s.people.map((p) => p.stage);
+        advance(s, 0.1);
+        s.people.forEach((p, index) => {
+          const duration =
+            p.stage === "paying" ? (payingFor.get(p.id) ?? 0) + 0.1 : 0;
+          payingFor.set(p.id, duration);
+          expect(duration).toBeLessThan(20);
+          if (p.stage === "outside" && stages[index] !== "outside")
+            departures++;
+        });
+        if (tick % 1200 === 1199) {
+          expect(
+            s.transactions.length - previousTransactions,
+          ).toBeGreaterThanOrEqual(5);
+          previousTransactions = s.transactions.length;
+          conservation(s);
+        }
+      }
+      expect(departures).toBeGreaterThan(30);
+    }
+  }, 30000);
+  it("connects an exact clear payment spot when its rounded grid cell is occupied", () => {
+    const end: [number, number] = [-10.2, 10.3];
+    const route = routeBetween([-10.2, 13], end, [[-10.2, 11.6]]);
+    expect(route.length).toBeGreaterThan(0);
+    expect(route.at(-1)).toEqual(end);
+  });
   it("keeps visible people physically separated through arrivals, queueing, tasks and exits", () => {
     for (const seed of [42, 2401, 991]) {
       const s = createStore(seed);
@@ -823,6 +865,145 @@ describe("promotions, shopper needs and friendly security", () => {
         (t) => s.people.find((p) => p.id === t.employeeId)?.job === "security",
       ),
     ).toBe(false);
+    conservation(s);
+  });
+});
+
+describe("player mischief and emergent stories", () => {
+  function until(s: StoreState, done: () => boolean, seconds = 100) {
+    for (let i = 0; i < seconds * 10 && !done(); i++) advance(s, 0.1);
+    expect(done()).toBe(true);
+  }
+  it("places one real basket unit on the floor, then physically cleans it up", () => {
+    const s = createStore(),
+      p = s.people.find((p) => p.stage === "queueing")!;
+    s.nextEmergentAt = s.nextMishapAt = s.nextSocialAt = Infinity;
+    const line = { ...p.basket[0] },
+      batch = s.batches.find((b) => b.id === line.batchId)!,
+      before = batch.inBaskets;
+    expect(interact(s, { type: "drop-basket", personId: p.id }).ok).toBe(true);
+    const item = s.floorItems[0];
+    expect(batch.inBaskets).toBe(before - 1);
+    expect(batch.onFloor).toBe(1);
+    expect(p.basket.reduce((n, l) => n + l.quantity, 0)).toBe(1);
+    expect(
+      Math.hypot(
+        item.position[0] - p.position[0],
+        item.position[1] - p.position[1],
+      ),
+    ).toBeLessThan(1.2);
+    expect(interact(s, { type: "drop-basket", personId: p.id }).ok).toBe(false);
+    expect(
+      s.events.some((e) =>
+        e.topic.endsWith(`people/${p.id}/basket/item-placed`),
+      ),
+    ).toBe(true);
+    conservation(s);
+    until(s, () => item.status === "cleared");
+    expect(batch.onFloor).toBe(0);
+    conservation(s);
+  });
+  it("detects an attempted unpaid exit only at the exit, then settles exactly the held goods", () => {
+    const s = createStore(),
+      p = s.people.find((p) => p.stage === "queueing")!;
+    s.nextEmergentAt =
+      s.nextMishapAt =
+      s.nextSocialAt =
+      s.nextSecurityAt =
+        Infinity;
+    const basket = structuredClone(p.basket),
+      position = [...p.position];
+    expect(interact(s, { type: "attempt-unpaid", personId: p.id }).ok).toBe(
+      true,
+    );
+    expect(p.exitAttempt).toBe(true);
+    expect(p.position).toEqual(position);
+    expect(p.basket).toEqual(basket);
+    expect(activeSecurityCase(s)).toBeUndefined();
+    expect(interact(s, { type: "attempt-unpaid", personId: p.id }).ok).toBe(
+      false,
+    );
+    until(s, () => !!activeSecurityCase(s));
+    const c = activeSecurityCase(s)!;
+    expect(c.origin).toBe("exit-attempt");
+    expect(p.exitAttempt).toBe(false);
+    expect(p.basket).toEqual(basket);
+    expect(
+      p.destination &&
+        Math.hypot(
+          p.position[0] - p.destination[0],
+          p.position[1] - p.destination[1],
+        ),
+    ).toBeLessThan(0.05);
+    until(s, () => c.stage === "resolved");
+    const payments = s.transactions.filter((t) => t.source === "assisted");
+    expect(payments).toHaveLength(1);
+    expect(payments[0].lines.reduce((n, l) => n + l.quantity, 0)).toBe(
+      basket.reduce((n, l) => n + l.quantity, 0),
+    );
+    expect(p.basket).toHaveLength(0);
+    const ids = [
+      "exit-attempt/started",
+      "/detected",
+      "/correlated",
+      "/assigned",
+      "/checking",
+      "purchase/assisted/completed",
+      "/resolved",
+    ].map((part) => s.events.find((e) => e.topic.includes(part))!.id);
+    for (let i = 1; i < ids.length; i++)
+      expect(ids[i]).toBeGreaterThan(ids[i - 1]);
+    conservation(s);
+  });
+  it("refuses empty baskets and busy guards without altering inventory", () => {
+    const s = createStore(),
+      before = structuredClone(s.batches);
+    expect(interact(s, { type: "drop-basket", personId: 0 }).ok).toBe(false);
+    expect(interact(s, { type: "attempt-unpaid", personId: 0 }).ok).toBe(false);
+    const p = s.people.find((p) => p.stage === "queueing")!;
+    expect(interact(s, { type: "attempt-unpaid", personId: p.id }).ok).toBe(
+      true,
+    );
+    const other = s.people.find((v) => v.id !== p.id && v.basket.length)!;
+    expect(interact(s, { type: "attempt-unpaid", personId: other.id }).ok).toBe(
+      false,
+    );
+    expect(s.batches).toEqual(before);
+    conservation(s);
+  });
+  it("spontaneously drops a real basket item and emits the sensor and inventory chain", () => {
+    const s = createStore();
+    s.nextEmergentAt = s.nextMishapAt = s.nextSocialAt = Infinity;
+    run(s, 5);
+    s.nextEmergentAt = s.time;
+    s.emergentRound = 0;
+    advance(s, 0.1);
+    expect(
+      s.events.some(
+        (e) =>
+          e.topic.endsWith("basket/item-placed") &&
+          e.message.includes("dropped"),
+      ),
+    ).toBe(true);
+    expect(s.floorItems.some((i) => i.status !== "cleared")).toBe(true);
+    conservation(s);
+  });
+  it("turns a conversation about an offer into actual shopping routes", () => {
+    const s = createStore(1);
+    s.nextEmergentAt = s.nextMishapAt = s.nextSocialAt = Infinity;
+    interact(s, { type: "promotion", promotion: "lunch" });
+    expect(interact(s, { type: "chat", personId: 0 }).ok).toBe(true);
+    const a = s.activities.find((a) => a.kind === "chat")!;
+    expect(a.followUp).toBe("promotion");
+    until(s, () => a.stage === "complete");
+    expect(
+      s.events.some(
+        (e) =>
+          e.topic.includes("promotion/word-of-mouth/") &&
+          e.message.includes("heading to"),
+      ),
+    ).toBe(true);
+    expect(s.people[0].reaction?.text).toBe("Let's try that deal!");
     conservation(s);
   });
 });

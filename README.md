@@ -2,7 +2,9 @@
 
 A retailer-focused, interactive supermarket built with React, TypeScript, Three.js and React Three Fiber. Explore the Paris Flagship, inspect stock and equipment, review agent recommendations, and watch their effects reach the shop floor.
 
-**Visit:** https://solacese.github.io/sam-retail/
+**Play on AWS:** https://d2ghkgr2gk9p6l.cloudfront.net/
+
+**GitHub Pages:** https://solacese.github.io/sam-retail/
 
 ## Explore the shop
 
@@ -42,6 +44,8 @@ The 3D scene loads separately from the operational interface. Phones use a lower
 
 ## Deployment and history
 
+AWS uses a private encrypted S3 bucket and an HTTPS CloudFront distribution, defined in `infra/aws-static.yaml`. With an authorized AWS CLI session, run `npm run deploy:aws` from a clean, committed checkout. It builds with a root base path, applies the `sam-retail-demo` stack in `ca-central-1`, uploads assets before the entry page, and invalidates the entry page cache. Override `AWS_REGION` and `RETAIL_AWS_STACK` for a separate deployment. `release.json` records the exact Git commit. Old hashed assets are retained so open tabs keep working. No credentials are embedded in the site.
+
 The existing `.github/workflows/pages.yml` checks, builds, browser-tests and publishes `dist/` on pushes to `main`. Vite uses `/sam-retail/`. Actions remain pinned to immutable SHAs.
 
 The previous card game is preserved at Git tag `archive/card-game-2026-10-16`. This rebuild removes its independent telemetry and survival campaign.
@@ -65,3 +69,7 @@ Click the freestanding **shop screen** or open **Promotions** to advertise baker
 At most two shoppers ask for coffee or lunch in little thought bubbles. Click the person and choose **Help find coffee/lunch**. A free colleague escorts them to the aisle, then the shopper picks an actual item. If the team is occupied, the shopper follows the aisle signs. Their basket and the event stream show the outcome. Shoppers can also find what they need on their own.
 
 **Rémi**, the guard in blue, patrols near the entrance. Click him or open **Security** to see a receipt check, a forgotten paid bag, or an already-matched receipt. You can request a friendly check or send an unpaid item back to a staffed checkout. Rémi also acts on his own. A missed item stays in basket stock until real payment, either at a till or on his handheld. Returning a paid bag does not charge it again or add inventory. These are seeded shop-life stories, not live fraud detection or accusations. Camera, basket, receipt and staff events show successful local coordination.
+
+Select a shopper with groceries, then expand **More actions** to **Put one basket item down** or **Try leaving without paying**. The first transfers one actual unit onto the floor for a colleague to collect. The second sends the shopper toward the exit; only arrival triggers the sensor, basket/payment correlation and Rémi's response. A handheld payment settles those goods exactly once. Both actions have visible gestures and streamed consequences. Busy shoppers and empty baskets cannot perform them.
+
+Seeded spontaneous stories include basket drops, helpful colleagues, shoppers discussing active offers, and occasional unpaid exit attempts. Word of mouth sends people to real offer products; it never fabricates a purchase. Till lanes have separate payment and queue positions with generous spacing, so a waiting shopper cannot block the next customer's payment spot. Routing connects exact destinations to clear navigation cells instead of treating a rounded, occupied grid cell as an unreachable destination.

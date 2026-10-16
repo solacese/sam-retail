@@ -129,7 +129,9 @@ export function SecurityInspector({ state, command, onClose }: Props) {
         <>
           <h3>
             {c.kind === "receipt"
-              ? "One item still needs paying"
+              ? c.origin === "exit-attempt"
+                ? "An unpaid basket at the exit"
+                : "One item still needs paying"
               : c.kind === "bag"
                 ? "A forgotten bag"
                 : "A friendly receipt check"}
@@ -137,7 +139,9 @@ export function SecurityInspector({ state, command, onClose }: Props) {
           <p className="muted">
             {personName(shopper!)} ·{" "}
             {c.kind === "receipt"
-              ? "Basket and receipt events show one unscanned item. Rémi can check and offer handheld payment."
+              ? c.origin === "exit-attempt"
+                ? `Exit, basket and purchase events show ${shopper!.basket.reduce((n, l) => n + l.quantity, 0)} unpaid items and no matching payment. Rémi can help put it right.`
+                : "Basket and receipt events show one unscanned item. Rémi can check and offer handheld payment."
               : c.kind === "bag"
                 ? `The bag is already paid. Receipt #${c.transactionId} helps Rémi find its owner.`
                 : `Receipt #${c.transactionId} matches the basket. A quick thank-you is all that is needed.`}

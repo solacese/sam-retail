@@ -9,7 +9,9 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "check": "npm run test && npm run build"
+    "check": "npm run test && npm run build",
+    "build:aws": "tsc -b && vite build --base / --outDir dist-aws",
+    "deploy:aws": "node scripts/deploy-aws.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",

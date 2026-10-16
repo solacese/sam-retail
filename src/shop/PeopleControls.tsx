@@ -9,12 +9,14 @@ import {
   PackageOpen,
   MousePointer2,
   ChevronDown,
+  ShieldAlert,
 } from "lucide-react";
 import {
   DEPARTMENTS,
   personName,
   personActivity,
   canDirectPerson,
+  activeSecurityCase,
   needText,
   type StoreCommand,
   type StoreState,
@@ -136,6 +138,46 @@ export function PersonInspector({
             <Sparkles size={17} />
             <span>Do a happy dance</span>
           </button>
+          {p.role === "shopper" && (
+            <>
+              <button
+                disabled={
+                  !p.basket.length ||
+                  !canDirectPerson(p) ||
+                  (p.mischiefUntil ?? 0) > state.time
+                }
+                title={
+                  p.basket.length
+                    ? "Place one real item from this basket on the floor"
+                    : "Pick up some groceries first"
+                }
+                onClick={() => command({ type: "drop-basket", personId: id })}
+              >
+                <PackageOpen size={17} />
+                <span>Put one basket item down</span>
+              </button>
+              <button
+                disabled={
+                  !p.basket.length ||
+                  !canDirectPerson(p) ||
+                  !!activeSecurityCase(state) ||
+                  state.people.some((p) => p.exitAttempt) ||
+                  (p.mischiefUntil ?? 0) > state.time
+                }
+                title={
+                  p.basket.length
+                    ? "Try an unpaid exit in the shop simulation"
+                    : "Pick up some groceries first"
+                }
+                onClick={() =>
+                  command({ type: "attempt-unpaid", personId: id })
+                }
+              >
+                <ShieldAlert size={17} />
+                <span>Try leaving without paying</span>
+              </button>
+            </>
+          )}
         </div>
         <label className="person-destination">
           {p.role === "shopper" ? "Explore an aisle" : "Care for a display"}
