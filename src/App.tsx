@@ -38,6 +38,7 @@ import {
 } from "./simulation/store";
 import { useSimulation } from "./simulation/useSimulation";
 import { EuropeNetwork } from "./shop/EuropeNetwork";
+import { StorePulse } from "./shop/StorePulse";
 const StoreScene = lazy(() => import("./shop/StoreScene"));
 const money = (n: number) =>
   new Intl.NumberFormat("en-IE", {
@@ -279,7 +280,6 @@ export default function App() {
     const id = setTimeout(() => setNotice(""), 5000);
     return () => clearTimeout(id);
   }, [notice]);
-  const recent = s.events[0];
   return (
     <div className="app">
       <header className="app-header">
@@ -400,6 +400,11 @@ export default function App() {
         </div>
       </section>
       <main className="workspace">
+        <StorePulse
+          state={s}
+          running={sim.running}
+          onOpenEvents={() => setPanel("events")}
+        />
         <section className="shop-stage" aria-label="Paris Flagship shop floor">
           <div className="scene-caption">
             <div>
@@ -480,13 +485,6 @@ export default function App() {
               Drag to explore · scroll to zoom
             </span>
           </div>
-          <button className="event-ticker" onClick={() => setPanel("events")}>
-            <span className="ticker-icon">
-              <Radio size={15} />
-            </span>
-            <span>{recent?.message}</span>
-            <ChevronRight size={15} />
-          </button>
         </section>
         <aside className="store-sidebar" aria-label="Store operations">
           {selected ? (

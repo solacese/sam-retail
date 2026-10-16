@@ -264,3 +264,93 @@ test("manager decisions set store priorities instead of assigning individual she
     }),
   ).toHaveCount(0);
 });
+
+test("live information stays beside the desktop shop and stacks below it on phones", async ({
+  page,
+}, testInfo) => {
+  await openStore(page);
+  await pause(page);
+  const pulse = page.getByRole("complementary", {
+    name: "Live store information",
+  });
+  await expect(
+    pulse.getByRole("heading", { name: "Store pulse" }),
+  ).toBeVisible();
+  await expect(pulse.getByTestId("fridge-temperature")).toContainText("°C");
+  await expect(
+    pulse.getByRole("img", { name: /Fridge .*degrees Celsius/ }),
+  ).toBeVisible();
+  const read = async (id: string) =>
+    Number((await pulse.getByTestId(id).innerText()).replaceAll(",", ""));
+  expect(await read("total-inventory")).toBe(
+    (await read("inventory-shelf")) +
+      (await read("inventory-backroom")) +
+      (await read("inventory-held")),
+  );
+  const left = await pulse.boundingBox(),
+    shop = await page
+      .getByRole("region", { name: "Paris Flagship shop floor" })
+      .boundingBox();
+  if (testInfo.project.name === "desktop") {
+    expect(left!.x + left!.width).toBeLessThanOrEqual(shop!.x + 1);
+    const feed = await pulse.getByTestId("live-event-feed").boundingBox();
+    expect(feed!.height).toBeGreaterThanOrEqual(180);
+    expect(feed!.y + 100).toBeLessThan(900);
+  } else expect(left!.y).toBeGreaterThanOrEqual(shop!.y + shop!.height - 1);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("live feed filters, visualizes price updates and respects the shared pause control", async ({
+  page,
+}) => {
+  await openStore(page);
+  await pause(page);
+  await approve(
+    page,
+    "Protect margin or reduce food waste?",
+    "Favor lower food waste",
+  );
+  const pulse = page.getByRole("complementary", {
+    name: "Live store information",
+  });
+  await pulse
+    .getByRole("combobox", { name: "Filter live events" })
+    .selectOption("pricing");
+  await expect(pulse.locator(".pulse-event")).toHaveCount(4);
+  await expect(pulse.locator(".pulse-event").first()).toContainText(
+    "on shelf, till & online",
+  );
+  await expect(
+    pulse.getByRole("img", { name: /Event activity over the last 30 seconds/ }),
+  ).toBeVisible();
+  const first = await pulse
+    .locator(".pulse-event")
+    .first()
+    .getAttribute("data-event-id");
+  await page.waitForTimeout(700);
+  await expect(pulse.locator(".pulse-event").first()).toHaveAttribute(
+    "data-event-id",
+    first!,
+  );
+  await pulse.getByRole("button", { name: "Open full event history" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "The event stream" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close dialog" }).click();
+  await pulse
+    .getByRole("combobox", { name: "Filter live events" })
+    .selectOption("iot");
+  await page
+    .getByRole("button", { name: "Play simulation", exact: true })
+    .click();
+  await expect(
+    pulse
+      .locator(".pulse-event")
+      .filter({ hasText: "fridge/fresh/temperature" })
+      .first(),
+  ).toBeVisible({ timeout: 10000 });
+});
