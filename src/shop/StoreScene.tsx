@@ -20,6 +20,8 @@ import {
   PICKUP,
   FLOOR,
   FIXTURE_WIDTH,
+  personName,
+  type FloorItem,
   stock,
   type StoreState,
 } from "../simulation/store";
@@ -90,6 +92,7 @@ function Sign({
   background = CREAM,
   small = false,
   flat = false,
+  bubble = false,
 }: {
   text: string;
   at: [number, number, number];
@@ -98,29 +101,43 @@ function Sign({
   background?: string;
   small?: boolean;
   flat?: boolean;
+  bubble?: boolean;
 }) {
   const texture = useMemo(() => {
     const canvas = document.createElement("canvas");
     canvas.width = 768;
-    canvas.height = small ? 128 : 180;
+    canvas.height = bubble ? 180 : small ? 128 : 180;
     const ctx = canvas.getContext("2d")!;
     ctx.fillStyle = background;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (bubble) {
+      ctx.beginPath();
+      ctx.roundRect(0, 0, canvas.width, canvas.height - 25, 34);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(350, canvas.height - 26);
+      ctx.lineTo(380, canvas.height);
+      ctx.lineTo(410, canvas.height - 26);
+      ctx.fill();
+    } else ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = color;
-    ctx.font = `600 ${small ? 62 : 70}px system-ui, sans-serif`;
+    ctx.font = `600 ${bubble ? 57 : small ? 62 : 70}px system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(text, 384, canvas.height / 2, 730);
+    ctx.fillText(text, 384, canvas.height / 2 - (bubble ? 10 : 0), 700);
     const t = new THREE.CanvasTexture(canvas);
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
-  }, [text, color, background, small]);
+  }, [text, color, background, small, bubble]);
   useEffect(() => () => texture.dispose(), [texture]);
   return (
     <mesh position={at} rotation={flat ? [-Math.PI / 2, 0, 0] : [0, 0, 0]}>
-      <planeGeometry args={[width, (width * (small ? 128 : 180)) / 768]} />
+      <planeGeometry
+        args={[width, (width * (bubble ? 180 : small ? 128 : 180)) / 768]}
+      />
       <meshBasicMaterial
         map={texture}
+        transparent={bubble}
+        alphaTest={bubble ? 0.01 : 0}
         side={THREE.DoubleSide}
         toneMapped={false}
       />
@@ -626,11 +643,15 @@ function Human({
   store,
   running,
   reduced,
+  selected,
+  onSelect,
 }: {
   id: number;
   store: MutableRefObject<StoreState>;
   running: MutableRefObject<boolean>;
   reduced: boolean;
+  selected: boolean;
+  onSelect: (id: string) => void;
 }) {
   const person = store.current.people.find((p) => p.id === id)!;
   const root = useRef<THREE.Group>(null!),
@@ -663,7 +684,8 @@ function Human({
     );
   const basket = person.basket.reduce((n, l) => n + l.quantity, 0),
     task = store.current.tasks.find((t) => t.id === person.taskId),
-    carrying = !!task?.cargo.length;
+    carrying = !!task?.cargo.length,
+    activity = store.current.activities.find((a) => a.id === person.activityId);
   useFrame((_, dt) => {
     const p = store.current.people.find((p) => p.id === id)!;
     if (!root.current) return;
@@ -674,6 +696,8 @@ function Human({
     }
     lastTime.current = store.current.time;
     if (!running.current) return;
+    const a = store.current.activities.find((a) => a.id === p.activityId);
+    const social = a?.stage === "active";
     const target = new THREE.Vector3(p.position[0], 0, p.position[1]);
     const factor = 1 - Math.exp(-Math.min(dt, 0.1) * 16);
     root.current.position.lerp(target, factor);
@@ -682,6 +706,18 @@ function Human({
       walking = p.moving;
     if (Math.abs(dx) + Math.abs(dz) > 0.001) angle.current = Math.atan2(dx, dz);
     if (p.stage === "picking") angle.current = Math.PI;
+    if (social && a?.kind === "chat") {
+      const partner = store.current.people.find(
+        (other) => a.people.includes(other.id) && other.id !== p.id,
+      );
+      if (partner)
+        angle.current = Math.atan2(
+          partner.position[0] - p.position[0],
+          partner.position[1] - p.position[1],
+        );
+    }
+    if (social && a && ["tidy", "cleanup"].includes(a.kind))
+      angle.current = Math.PI;
     if (p.stage === "paying") angle.current = -Math.PI / 2;
     if (p.role === "employee" && p.stage === "working" && !walking)
       angle.current = p.id < 102 || task?.kind === "checkout" ? 0 : Math.PI;
@@ -723,10 +759,34 @@ function Human({
       gesture && p.stage === "queueing" ? Math.sin(idlePhase * 0.5) * 0.16 : 0;
     eyes.current.scale.y =
       gesture && (store.current.time + id * 0.47) % 4.8 < 0.13 ? 0.12 : 1;
-    if (p.stage === "leaving" && gesture)
+    if (social && gesture) {
+      if (a?.kind === "chat") {
+        arm.current.rotation.x = -0.6 + Math.sin(idlePhase * 2) * 0.25;
+        rightArm.current.rotation.x = -0.3 + Math.cos(idlePhase * 2) * 0.15;
+      } else if (a?.kind === "dance") {
+        arm.current.rotation.x = Math.sin(idlePhase * 3) * 0.7;
+        rightArm.current.rotation.x = -arm.current.rotation.x;
+      } else {
+        arm.current.rotation.x = -1 + Math.sin(idlePhase * 3) * 0.3;
+        rightArm.current.rotation.x = -0.85;
+      }
+    }
+    if (
+      (p.stage === "leaving" || (p.waveUntil ?? 0) > store.current.time) &&
+      gesture
+    )
       rightArm.current.rotation.z = -1.8 + Math.sin(idlePhase * 4) * 0.2;
     else rightArm.current.rotation.z = 0;
-    body.current.rotation.z = gesture && walking ? Math.sin(phase) * 0.025 : 0;
+    body.current.rotation.z =
+      gesture && social && a?.kind === "dance"
+        ? Math.sin(idlePhase * 3) * 0.13
+        : gesture && walking
+          ? Math.sin(phase) * 0.025
+          : 0;
+    body.current.rotation.x =
+      gesture && social && a?.kind === "cleanup"
+        ? 0.55 + Math.sin(idlePhase * 2) * 0.08
+        : 0;
     if (basketRef.current)
       basketRef.current.rotation.z =
         gesture && walking ? Math.sin(phase + 1) * 0.05 : 0;
@@ -741,11 +801,43 @@ function Human({
         ? Math.sin(Math.min(1, (0.9 - p.timer) / 0.9) * Math.PI) * 0.2
         : 0);
     root.current.position.y =
-      gesture && walking ? Math.abs(Math.sin(phase)) * 0.025 : 0;
+      gesture && social && a?.kind === "dance"
+        ? Math.abs(Math.sin(idlePhase * 3)) * 0.1
+        : gesture && walking
+          ? Math.abs(Math.sin(phase)) * 0.025
+          : 0;
   });
   const employee = person.role === "employee";
   return (
-    <group ref={root} position={initialPosition.current}>
+    <group
+      ref={root}
+      position={initialPosition.current}
+      userData={{ personId: id }}
+      onClick={(e) => {
+        if (e.delta > 5) return;
+        e.stopPropagation();
+        onSelect(`person:${id}`);
+      }}
+      onPointerOver={(e) => {
+        e.stopPropagation();
+        document.body.style.cursor = "pointer";
+      }}
+      onPointerOut={() => {
+        document.body.style.cursor = "";
+      }}
+    >
+      {selected && (
+        <>
+          <mesh position={[0, 0.06, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.65, 0.77, 32]} />
+            <meshBasicMaterial color="#4f9c78" transparent opacity={0.85} />
+          </mesh>
+          <mesh position={[0, 2.35, 0]}>
+            <octahedronGeometry args={[0.21]} />
+            <meshStandardMaterial color="#80c39b" roughness={0.4} />
+          </mesh>
+        </>
+      )}
       <group ref={body}>
         <group ref={legA} position={[-0.13, 0.44, 0]}>
           <SoftBox
@@ -884,6 +976,55 @@ function Human({
           </mesh>
         )}
       </group>
+      {activity?.stage === "approaching" &&
+        (activity.kind === "cleanup" || activity.kind === "tidy") && (
+          <Billboard position={[0, 2.3, 0]}>
+            <Sign
+              text={
+                activity.kind === "cleanup" ? "TIDY-UP CREW" : "DISPLAY CARE"
+              }
+              at={[0, 0, 0]}
+              width={3.4}
+              small
+              background="#e3ebd3"
+            />
+          </Billboard>
+        )}
+      {activity &&
+        activity.stage === "active" &&
+        (activity.kind !== "chat" ||
+          activity.people[Math.floor(activity.remaining / 2) % 2] === id) && (
+          <Billboard position={[0, 2.8, 0]}>
+            <Sign
+              text={
+                activity.kind === "chat" && activity.people[1] === id
+                  ? "Ha, absolutely!"
+                  : activity.line
+              }
+              at={[0, 0, 0]}
+              width={4.6}
+              small
+              bubble
+              background="#fff8df"
+              color="#52674b"
+            />
+          </Billboard>
+        )}
+      {selected && !activity && (
+        <Billboard position={[0, 2.8, 0]}>
+          <Sign
+            text={
+              (person.waveUntil ?? 0) > store.current.time
+                ? "Hello!"
+                : personName(person)
+            }
+            at={[0, 0, 0]}
+            width={2.3}
+            small
+            bubble
+          />
+        </Billboard>
+      )}
       {task && task.stage !== "complete" && (
         <Billboard position={[0, 2.25, 0]}>
           <Sign
@@ -954,6 +1095,94 @@ function Camera({ reset }: { reset: number }) {
       }}
       touches={{ ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE }}
     />
+  );
+}
+function DroppedItem({
+  item,
+  store,
+  running,
+  reduced,
+  onSelect,
+}: {
+  item: FloorItem;
+  store: MutableRefObject<StoreState>;
+  running: MutableRefObject<boolean>;
+  reduced: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const root = useRef<THREE.Group>(null!);
+  const product = store.current.products.find((p) => p.id === item.productId)!;
+  const rest = product.shape === "round" ? 0.27 : 0.23;
+  const visualTime = useRef(item.at);
+  useFrame((_, dt) => {
+    if (!root.current || !running.current) return;
+    visualTime.current +=
+      (store.current.time - visualTime.current) *
+      (1 - Math.exp(-Math.min(dt, 0.1) * 16));
+    const t = Math.max(0, Math.min(1, (visualTime.current - item.at) / 1.1));
+    root.current.position.x = reduced ? 0 : (1 - t) * -0.45;
+    root.current.position.z = reduced ? 0 : (1 - t) * -1.4;
+    root.current.position.y = reduced
+      ? rest
+      : t < 0.65
+        ? 1.5 * (1 - (t / 0.65) ** 2) + rest
+        : rest +
+          (Math.abs(Math.sin(((t - 0.65) / 0.35) * Math.PI * 2)) *
+            0.2 *
+            (1 - t)) /
+            0.35;
+    root.current.rotation.z = reduced
+      ? 0
+      : t * Math.PI * (item.id % 2 ? 0.3 : 1.2);
+    root.current.rotation.x = reduced ? 0 : (t * Math.PI) / 2;
+  });
+  return (
+    <group
+      position={[item.position[0], 0, item.position[1]]}
+      onClick={(e) => {
+        if (e.delta > 5) return;
+        e.stopPropagation();
+        onSelect(`floor:${item.id}`);
+      }}
+    >
+      <mesh position={[0, 0.07, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.35, 0.43, 24]} />
+        <meshBasicMaterial color="#d9af6f" transparent opacity={0.65} />
+      </mesh>
+      <group
+        ref={root}
+        position={[
+          reduced ? 0 : -0.45,
+          reduced ? rest : 1.65,
+          reduced ? 0 : -1.4,
+        ]}
+      >
+        {product.shape === "round" ? (
+          <mesh>
+            <sphereGeometry args={[0.19, 10, 8]} />
+            <meshStandardMaterial color={product.color} />
+          </mesh>
+        ) : (
+          <SoftBox
+            at={[0, 0, 0]}
+            size={[0.3, 0.37, 0.28]}
+            color={product.color}
+          />
+        )}
+      </group>
+      {store.current.time - item.at < 4 && (
+        <Billboard position={[0, 2.2, 0]}>
+          <Sign
+            text="Oops!"
+            bubble
+            at={[0, 0, 0]}
+            width={2.3}
+            small
+            background="#f7e6c4"
+          />
+        </Billboard>
+      )}
+    </group>
   );
 }
 function World({
@@ -1141,6 +1370,18 @@ function World({
           <meshStandardMaterial color="#344d42" />
         </mesh>
       </group>
+      {state.floorItems
+        .filter((i) => i.status !== "cleared")
+        .map((item) => (
+          <DroppedItem
+            key={item.id}
+            item={item}
+            store={store}
+            running={running}
+            reduced={reduced}
+            onSelect={onSelect}
+          />
+        ))}
       {state.people.map((p) => (
         <Human
           key={p.id}
@@ -1148,6 +1389,8 @@ function World({
           store={store}
           running={running}
           reduced={reduced}
+          selected={selected === `person:${p.id}`}
+          onSelect={onSelect}
         />
       ))}
     </group>

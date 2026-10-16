@@ -37,9 +37,16 @@ import {
   type Category,
   type DecisionKind,
   type StoreState,
+  type StoreCommand,
 } from "./simulation/store";
 import { useSimulation } from "./simulation/useSimulation";
 import { EuropeNetwork } from "./shop/EuropeNetwork";
+import {
+  PersonInspector,
+  ShelfActions,
+  FloorInspector,
+  PeopleList,
+} from "./shop/PeopleControls";
 import { StorePulse } from "./shop/StorePulse";
 const StoreScene = lazy(() => import("./shop/StoreScene"));
 const money = (n: number) =>
@@ -108,10 +115,12 @@ function Inspector({
   id,
   state,
   onClose,
+  command,
 }: {
   id: string;
   state: StoreState;
   onClose: () => void;
+  command: (command: StoreCommand) => void;
 }) {
   const department = DEPARTMENTS.find((d) => d.id === id),
     products = state.products.filter((p) => p.department === id),
@@ -142,6 +151,7 @@ function Inspector({
               ? `${state.fridge.toFixed(1)}°C · safely chilled`
               : "Shelf and backroom stock, updated as people shop."}
           </p>
+          <ShelfActions id={id} command={command} />
           <div className="product-table">
             <div className="product-row table-head">
               <span>Product / price</span>
@@ -277,7 +287,29 @@ export default function App() {
     s = sim.snapshot,
     m = metrics(s),
     priorities = visibleRecommendations(s);
+  const command = (action: StoreCommand) => {
+    const result = sim.command(action);
+    setNotice(
+      result.message +
+        (result.ok && !sim.running ? " Press Play to watch." : ""),
+    );
+    if (result.ok && window.innerWidth <= 760) {
+      setSelected(null);
+      requestAnimationFrame(() =>
+        document.querySelector(".shop-stage")?.scrollIntoView({
+          behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? "instant"
+            : "smooth",
+          block: "start",
+        }),
+      );
+    }
+  };
   const rec = s.recommendations.find((r) => r.id === decision);
+  useEffect(() => {
+    if (selected)
+      document.querySelector(".store-sidebar")?.scrollTo({ top: 0 });
+  }, [selected]);
   useEffect(() => {
     if (!notice) return;
     const id = setTimeout(() => setNotice(""), 5000);
@@ -485,15 +517,33 @@ export default function App() {
               </button>
             </div>
             <span className="camera-hint">
-              Drag to explore · scroll to zoom
+              Click a person or shelf · drag to explore
             </span>
           </div>
         </section>
-        <aside className="store-sidebar" aria-label="Store operations">
-          {selected ? (
+        <aside
+          className={`store-sidebar${selected ? " has-selection" : ""}`}
+          aria-label="Store operations"
+        >
+          {selected?.startsWith("person:") ? (
+            <PersonInspector
+              id={Number(selected.split(":")[1])}
+              state={s}
+              command={command}
+              onClose={() => setSelected(null)}
+            />
+          ) : selected?.startsWith("floor:") ? (
+            <FloorInspector
+              id={Number(selected.split(":")[1])}
+              state={s}
+              command={command}
+              onClose={() => setSelected(null)}
+            />
+          ) : selected ? (
             <Inspector
               id={selected}
               state={s}
+              command={command}
               onClose={() => setSelected(null)}
             />
           ) : (
@@ -564,6 +614,7 @@ export default function App() {
                 ))}
             </section>
           )}
+          <PeopleList state={s} onSelect={setSelected} />
           <section className="department-list">
             <div className="section-heading">
               <span className="eyebrow">DEPARTMENTS</span>

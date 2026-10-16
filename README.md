@@ -18,7 +18,7 @@ A retailer-focused, interactive supermarket built with React, TypeScript, Three.
 
 ## One source of truth
 
-`src/simulation/store.ts` owns stock batches, shoppers, colleagues, routes, tasks, transactions, recommendations and events. The simulation advances in fixed 100ms steps; the Three.js scene interpolates people between updates. Stock moves between shelves, backroom, receiving, baskets, task cargo, sold units and waste. Restocking transfers stock; it never creates units. Deliveries add explicit batches.
+`src/simulation/store.ts` owns stock batches, shoppers, colleagues, routes, tasks, transactions, recommendations and events. The simulation advances in fixed 100ms steps; the Three.js scene interpolates people between updates. Stock moves between shelves, backroom, receiving, baskets, task cargo, dropped floor items, sold units and waste. Restocking transfers stock; it never creates units. Deliveries add explicit batches.
 
 Sales are recognized at payment. Gross profit subtracts product costs; the extra checkout's €22 staffing cost is shown separately in its inspector. Availability means products with shelf stock. Food waste includes expired batches. Queue time uses actual waiting durations. Satisfaction is an illustrative score derived from unfilled product requests and queue length, not a customer survey.
 
@@ -49,3 +49,11 @@ The previous card game is preserved at Git tag `archive/card-game-2026-10-16`. T
 ## Assets and attribution
 
 The flagship consists of procedural 3D geometry, not a background image. European store cards retain the ten generated illustrations documented in [shop artwork](docs/shop-artwork.md). Country boundaries and city points come from [Natural Earth](https://www.naturalearthdata.com/about/terms-of-use/) public-domain data. Manrope is self-hosted under the included SIL Open Font License. Lucide icons use the ISC license. Solace is a trademark of Solace Corporation.
+
+## Little shop life
+
+Click a person in the 3D shop to open their action menu. Wave hello, start a nearby conversation, take a tiny dance break, or choose an aisle to browse. Floor colleagues can tidy a display; occupied workers and checkout staff keep their assigned jobs. A selection diamond, speech bubbles and gestures show who is doing what. The collapsed **People in the shop** menu provides the same controls for keyboard users and the WebGL fallback. On phones, commands close the bottom sheet and bring the shop back into view.
+
+Shelf inspectors now offer **Send a shopper here**, **Tidy this display**, and **A little shelf wobble**. Shoppers also start occasional conversations on their own, and small seeded mishaps happen during normal store life. A dropped item moves from shelf stock to an explicit `onFloor` location; it remains owned inventory but cannot be sold. An available colleague walks over to clean up. Sealed goods return to the shelf; loose produce and bakery goods, or expired goods, become recorded waste. Nothing creates stock or revenue by animation. Floor detections, assigned cleanup, and completed work appear in the same Solace-style event stream. No more than two floor mishaps can be active at once.
+
+All these activities share simulation time, Pause/Play, 1×/2×, reduced motion, and reset. Conversations reserve both participants and resume their shopping afterwards. Cleanup and tidying reserve the colleague so agent tasks cannot double-book them.

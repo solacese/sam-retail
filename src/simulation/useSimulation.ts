@@ -3,6 +3,8 @@ import {
   advance,
   createStore,
   decide,
+  interact,
+  type StoreCommand,
   type DecisionKind,
   type StoreState,
 } from "./store";
@@ -36,6 +38,11 @@ export function useSimulation(overlayOpen: boolean) {
     setSnapshot({ ...store.current });
     return result;
   }, []);
+  const command = useCallback((command: StoreCommand) => {
+    const result = interact(store.current, command);
+    setSnapshot({ ...store.current });
+    return result;
+  }, []);
   const reset = useCallback(() => {
     store.current = createStore();
     setSnapshot({ ...store.current });
@@ -50,6 +57,7 @@ export function useSimulation(overlayOpen: boolean) {
     running,
     runningRef,
     choose,
+    command,
     reset,
   };
 }

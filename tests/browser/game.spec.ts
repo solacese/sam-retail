@@ -1,3 +1,4 @@
+import { OrthographicCamera, Vector3 } from "three";
 import { test, expect, type Page } from "@playwright/test";
 async function openStore(page: Page) {
   await page.goto("./");
@@ -403,4 +404,183 @@ test("presents at most two decisions and shows the actual work they cause", asyn
   await page.getByRole("button", { name: "Checkouts", exact: true }).click();
   const inspector = page.locator(".inspector");
   await expect(inspector.getByText("Open", { exact: true })).toHaveCount(3);
+});
+
+async function selectPerson(page: Page, name = "Mia") {
+  const people = page.locator(".people-list");
+  if ((await people.getAttribute("open")) === null)
+    await people.locator("summary").click();
+  await people
+    .getByRole("button", { name: new RegExp(`^Select ${name},`) })
+    .click();
+  await expect(
+    page.getByRole("region", { name: "Person actions" }),
+  ).toBeVisible();
+}
+test("people have playful actions and return to their shopping after a dance", async ({
+  page,
+}) => {
+  await openStore(page);
+  await pause(page);
+  await selectPerson(page);
+  await page.getByRole("button", { name: "Wave hello", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Mia says hello");
+  if (!(await page.getByRole("region", { name: "Person actions" }).isVisible()))
+    await selectPerson(page);
+  await page
+    .getByRole("button", { name: "Do a happy dance", exact: true })
+    .click();
+  if (!(await page.getByRole("region", { name: "Person actions" }).isVisible()))
+    await selectPerson(page);
+  await expect(page.getByTestId("person-activity")).toContainText("dance");
+  await page
+    .getByRole("button", { name: "Close inspector", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Play simulation", exact: true })
+    .click();
+  await page.waitForTimeout(4000);
+  await selectPerson(page);
+  await expect(page.getByTestId("person-activity")).not.toContainText(
+    "happy dance",
+  );
+});
+test("shelves can send shoppers over, take a tumble and coordinate cleanup", async ({
+  page,
+}) => {
+  await openStore(page);
+  await pause(page);
+  await page
+    .locator(".department-button")
+    .filter({ hasText: "Pantry" })
+    .click();
+  await page
+    .getByRole("button", { name: "Send a shopper here", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText("on the way to pantry");
+  const total = await page.getByTestId("total-inventory").innerText();
+  if (
+    !(await page
+      .getByRole("button", { name: "A little shelf wobble", exact: true })
+      .isVisible())
+  )
+    await page
+      .locator(".department-button")
+      .filter({ hasText: "Pantry" })
+      .click();
+  await page
+    .getByRole("button", { name: "A little shelf wobble", exact: true })
+    .click();
+  await expect(page.getByTestId("inventory-floor")).toHaveText("1");
+  await expect(page.getByTestId("total-inventory")).toHaveText(total);
+  if (
+    await page
+      .getByRole("button", { name: "Close inspector", exact: true })
+      .isVisible()
+  )
+    await page
+      .getByRole("button", { name: "Close inspector", exact: true })
+      .click();
+  await page.getByRole("button", { name: "2×", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Play simulation", exact: true })
+    .click();
+  const pulse = page.getByRole("complementary", {
+    name: "Live store information",
+  });
+  await pulse
+    .getByRole("combobox", { name: "Filter live events" })
+    .selectOption("inventory");
+  await expect(
+    pulse
+      .locator(".pulse-event")
+      .filter({ hasText: "returned to the display" }),
+  ).toBeVisible({ timeout: 35000 });
+});
+test("a person can start a conversation and the selection works without WebGL", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (
+      type: string,
+      ...args: unknown[]
+    ) {
+      if (type === "webgl2" || type === "webgl") return null;
+      return original.call(this, type as "2d", ...(args as []));
+    } as typeof original;
+  });
+  await openStore(page);
+  await pause(page);
+  await selectPerson(page);
+  await page
+    .getByRole("button", { name: "Say hello to someone", exact: true })
+    .click();
+  if (!(await page.getByRole("region", { name: "Person actions" }).isVisible()))
+    await selectPerson(page);
+  await expect(page.getByTestId("person-activity")).toHaveText(
+    "Going to say hello",
+  );
+  await expect(
+    page.getByRole("button", { name: "Do a happy dance", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole("button", { name: "Close inspector", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Play simulation", exact: true })
+    .click();
+  await page.waitForTimeout(9000);
+  await page.getByRole("button", { name: "Events", exact: true }).click();
+  await page.getByRole("button", { name: "Operations", exact: true }).click();
+  await expect(
+    page.locator(".stream-event").filter({ hasText: "friendly chat" }).first(),
+  ).toBeVisible();
+});
+
+test("a tap on a 3D shopper opens the contextual person menu", async ({
+  page,
+}, testInfo) => {
+  await openStore(page);
+  await pause(page);
+  if (!(await page.locator("canvas").count()))
+    test.skip(true, "This device uses the operational fallback.");
+  await page.getByRole("button", { name: "Reset store", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Reset store", exact: true })
+    .click();
+  await page.waitForTimeout(400);
+  const canvas = page.locator("canvas"),
+    box = (await canvas.boundingBox())!;
+  const camera = new OrthographicCamera(
+    -box.width / 2,
+    box.width / 2,
+    box.height / 2,
+    -box.height / 2,
+    0.1,
+    150,
+  );
+  camera.position.set(35, 43, 45);
+  camera.lookAt(0, 0, 1.5);
+  camera.zoom = Math.min(
+    box.width / (box.width < 700 ? 59 : 58),
+    box.height / 35,
+  );
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld();
+  const point = new Vector3(-14.7, 1.4, -4).project(camera);
+  const position = {
+    x: ((point.x + 1) * box.width) / 2,
+    y: ((1 - point.y) * box.height) / 2,
+  };
+  if (testInfo.project.name === "desktop") await canvas.click({ position });
+  else await canvas.tap({ position });
+  const menu = page.getByRole("region", { name: "Person actions" });
+  await expect(
+    menu.getByRole("heading", { name: "Mia", exact: true }),
+  ).toBeVisible();
+  await expect(
+    menu.getByRole("button", { name: "Wave hello", exact: true }),
+  ).toBeVisible();
 });

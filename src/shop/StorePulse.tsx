@@ -27,10 +27,16 @@ export function StorePulse({
       backroom: n.backroom + b.backroom,
       receiving: n.receiving + b.receiving,
       held: n.held + b.inBaskets + b.inTransit,
+      floor: n.floor + b.onFloor,
     }),
-    { shelf: 0, backroom: 0, receiving: 0, held: 0 },
+    { shelf: 0, backroom: 0, receiving: 0, held: 0, floor: 0 },
   );
-  const total = totals.shelf + totals.backroom + totals.receiving + totals.held;
+  const total =
+    totals.shelf +
+    totals.backroom +
+    totals.receiving +
+    totals.held +
+    totals.floor;
   const shoppers = state.people.filter(
     (p) => p.role === "shopper" && p.stage !== "outside",
   ).length;
@@ -73,13 +79,14 @@ export function StorePulse({
         <div
           className="inventory-distribution"
           role="img"
-          aria-label={`${totals.shelf} units on shelves, ${totals.backroom} in backroom, ${totals.held} held in baskets or staff transfers, ${totals.receiving} at receiving`}
+          aria-label={`${totals.shelf} units on shelves, ${totals.backroom} in backroom, ${totals.held} held in baskets or staff transfers, ${totals.receiving} at receiving, ${totals.floor} awaiting floor cleanup`}
         >
           {[
             { key: "shelf", value: totals.shelf },
             { key: "backroom", value: totals.backroom },
             { key: "held", value: totals.held },
             { key: "receiving", value: totals.receiving },
+            { key: "floor", value: totals.floor },
           ].map((part) => (
             <span
               key={part.key}
@@ -110,6 +117,15 @@ export function StorePulse({
             </dt>
             <dd data-testid="inventory-held">{totals.held}</dd>
           </div>
+          {totals.floor > 0 && (
+            <div>
+              <dt>
+                <i className="stock-floor" />
+                On floor · cleanup
+              </dt>
+              <dd data-testid="inventory-floor">{totals.floor}</dd>
+            </div>
+          )}
           {totals.receiving > 0 && (
             <div>
               <dt>

@@ -74,6 +74,7 @@ export interface ProductBatch {
   receiving: number;
   inBaskets: number;
   inTransit: number;
+  onFloor: number;
   sold: number;
   waste: number;
   expiresAt: number;
@@ -100,7 +101,8 @@ export interface Person {
     | "leaving"
     | "outside"
     | "working"
-    | "task";
+    | "task"
+    | "interacting";
   timer: number;
   basket: BasketLine[];
   list: string[];
@@ -108,6 +110,8 @@ export interface Person {
   checkout: number;
   queueSince: number;
   taskId?: string;
+  activityId?: number;
+  waveUntil?: number;
   outfit: string;
   skin: string;
 }
@@ -146,6 +150,35 @@ export interface StoreEvent {
   message: string;
   target?: string;
 }
+export type ActivityKind = "chat" | "dance" | "tidy" | "cleanup";
+export interface StoreActivity {
+  id: number;
+  kind: ActivityKind;
+  people: number[];
+  target?: string;
+  stage: "approaching" | "active" | "complete" | "cancelled";
+  remaining: number;
+  startedAt: number;
+  deadline: number;
+  line: string;
+}
+export interface FloorItem {
+  id: number;
+  batchId: string;
+  productId: string;
+  position: Point;
+  at: number;
+  status: "waiting" | "assigned" | "cleared";
+  clearedAt?: number;
+}
+export type StoreCommand =
+  | { type: "wave"; personId: number }
+  | { type: "chat"; personId: number }
+  | { type: "dance"; personId: number }
+  | { type: "browse"; departmentId: string; personId?: number }
+  | { type: "tidy"; departmentId: string; personId?: number }
+  | { type: "wobble"; departmentId: string }
+  | { type: "cleanup"; itemId: number };
 export interface StoreState {
   time: number;
   seed: number;
@@ -154,6 +187,12 @@ export interface StoreState {
   products: Product[];
   batches: ProductBatch[];
   tasks: StaffTask[];
+  activities: StoreActivity[];
+  floorItems: FloorItem[];
+  nextActivity: number;
+  nextFloorItem: number;
+  nextSocialAt: number;
+  nextMishapAt: number;
   transactions: Transaction[];
   events: StoreEvent[];
   recommendations: Recommendation[];
@@ -536,6 +575,7 @@ export function createStore(seed = 2401): StoreState {
         receiving: 0,
         inBaskets: 0,
         inTransit: 0,
+        onFloor: 0,
         sold: 0,
         waste: 0,
         expiresAt: nearExpiry ? 160 + i * 4 : i >= 12 ? 86400 : 3600,
@@ -557,6 +597,12 @@ export function createStore(seed = 2401): StoreState {
         : [batch];
     }),
     tasks: [],
+    activities: [],
+    floorItems: [],
+    nextActivity: 1,
+    nextFloorItem: 1,
+    nextSocialAt: 14,
+    nextMishapAt: 24,
     transactions: [],
     events: [],
     decisionLog: [],
@@ -979,7 +1025,7 @@ function assignTask(
   id: string,
 ) {
   const person = s.people.find(
-    (p) => p.role === "employee" && p.id >= 102 && !p.taskId,
+    (p) => p.role === "employee" && p.id >= 102 && !p.taskId && !p.activityId,
   );
   if (!person) return false;
   const task: StaffTask = {
@@ -1144,6 +1190,7 @@ export function advance(s: StoreState, dt: number) {
   s.tick++;
   for (const p of s.people) {
     move(s, p, dt);
+    if (p.activityId) continue;
     if (p.role === "employee") {
       staffStep(s, p, dt);
       patrol(s, p, dt);
@@ -1220,6 +1267,7 @@ export function advance(s: StoreState, dt: number) {
       );
     }
   }
+  activityStep(s, dt);
   for (let i = 0; i < 3; i++) {
     if (!s.checkouts[i]) continue;
     const queue = s.people
@@ -1277,6 +1325,7 @@ export function advance(s: StoreState, dt: number) {
     }
   }
   dispatchWork(s);
+  ambientStep(s);
   for (const b of s.batches)
     if (b.expiresAt <= s.time && b.shelf + b.backroom + b.receiving > 0) {
       const n = b.shelf + b.backroom + b.receiving;
@@ -1319,6 +1368,7 @@ export function advance(s: StoreState, dt: number) {
       receiving: 24,
       inBaskets: 0,
       inTransit: 0,
+      onFloor: 0,
       sold: 0,
       waste: 0,
       expiresAt: s.time + 3600,
@@ -1407,13 +1457,17 @@ export function decisionImpact(s: StoreState, id: DecisionKind) {
     return choice.accepted
       ? s.checkouts[2]
         ? "Checkout 3 is open. Shoppers can use the extra lane."
-        : "A colleague is walking to checkout 3 to open it."
+        : s.tasks.some((t) => t.kind === "checkout" && t.stage !== "complete")
+          ? "A colleague is walking to checkout 3 to open it."
+          : "Service budget approved. A colleague will open checkout 3 after their current task."
       : "Two checkouts stay open. The extra staffing budget is saved.";
   if (id === "online")
     return choice.accepted
       ? s.onlineComplete
         ? "The collection order is packed, paid and on the counter."
-        : "A colleague is picking four items for the collection point."
+        : s.tasks.some((t) => t.kind === "online" && t.stage !== "complete")
+          ? "A colleague is picking four items for the collection point."
+          : "The order is queued. A colleague will pick it when available."
       : "Floor colleagues stay with in-store shoppers and shelf work.";
   if (!choice.accepted)
     return "Smaller shelf buffers. Colleagues refill only when stock gets low.";
@@ -1425,4 +1479,476 @@ export function decisionImpact(s: StoreState, id: DecisionKind) {
     : task?.stage === "destination"
       ? "A colleague is carrying stock from the backroom to the shelf."
       : "A colleague is heading to the stockroom for more shelf stock.";
+}
+
+const SHOPPER_NAMES = [
+  "Mia",
+  "Theo",
+  "Léa",
+  "Noah",
+  "Amira",
+  "Jules",
+  "Sofia",
+  "Oscar",
+  "Inès",
+  "Leo",
+  "Zoe",
+  "Hugo",
+];
+const STAFF_NAMES = ["Amina", "Louis", "Camille", "Alex", "Sam", "Robin"];
+export function personName(p: Person) {
+  return p.role === "shopper"
+    ? SHOPPER_NAMES[p.id % SHOPPER_NAMES.length]
+    : STAFF_NAMES[(p.id - 100) % STAFF_NAMES.length];
+}
+export function personActivity(s: StoreState, p: Person) {
+  const a = s.activities.find((a) => a.id === p.activityId);
+  if (a)
+    return a.stage === "approaching"
+      ? a.kind === "chat"
+        ? "Going to say hello"
+        : a.kind === "cleanup"
+          ? "Going to collect a dropped item"
+          : a.kind === "dance"
+            ? "Ready for a little dance"
+            : "Walking to the display"
+      : a.kind === "chat"
+        ? "Having a friendly chat"
+        : a.kind === "dance"
+          ? "Doing a little happy dance"
+          : a.kind === "cleanup"
+            ? "Picking up the dropped item"
+            : "Straightening the display";
+  const task = s.tasks.find((t) => t.id === p.taskId && t.stage !== "complete");
+  if (task)
+    return task.kind === "restock"
+      ? "Bringing stock to the shelves"
+      : task.kind === "online"
+        ? "Picking a collection order"
+        : "Opening checkout 3";
+  return {
+    entering: "Just arrived",
+    shopping: "Exploring the aisles",
+    picking: "Choosing groceries",
+    queueing: "Waiting for a checkout",
+    paying: "Paying for groceries",
+    leaving: "Heading home",
+    outside: "Out for a moment",
+    working:
+      p.id < 102 || p.taskId ? "Serving a checkout" : "Looking after the shop",
+    task: "Helping the shop",
+    interacting: "Enjoying a little moment",
+  }[p.stage];
+}
+function canPlay(p: Person) {
+  return (
+    !p.activityId &&
+    !p.taskId &&
+    (p.role === "shopper"
+      ? ["shopping", "picking", "entering"].includes(p.stage)
+      : p.id >= 102 && p.stage === "working")
+  );
+}
+function beginActivity(
+  s: StoreState,
+  kind: ActivityKind,
+  people: Person[],
+  target?: string,
+  line = "",
+) {
+  if (people.some((p) => !canPlay(p))) return null;
+  const activity: StoreActivity = {
+    id: s.nextActivity++,
+    kind,
+    people: people.map((p) => p.id),
+    target,
+    stage: "approaching",
+    remaining: kind === "chat" ? 5 : kind === "dance" ? 3 : 3.5,
+    startedAt: s.time,
+    deadline: s.time + 35,
+    line,
+  };
+  s.activities.push(activity);
+  for (const p of people) {
+    p.activityId = activity.id;
+    p.stage = "interacting";
+    p.route = [];
+    p.destination = null;
+    p.moving = false;
+  }
+  return activity;
+}
+function finishActivity(s: StoreState, a: StoreActivity, cancelled = false) {
+  a.stage = cancelled ? "cancelled" : "complete";
+  if (a.kind === "cleanup") {
+    const item = s.floorItems.find((i) => String(i.id) === a.target);
+    if (item && item.status !== "cleared") {
+      if (cancelled) item.status = "waiting";
+      else {
+        const batch = s.batches.find((b) => b.id === item.batchId)!;
+        const product = s.products.find((p) => p.id === item.productId)!;
+        batch.onFloor--;
+        const wasted =
+          ["produce", "bakery"].includes(product.department) ||
+          batch.expiresAt <= s.time;
+        if (wasted) batch.waste++;
+        else batch.shelf++;
+        item.status = "cleared";
+        item.clearedAt = s.time;
+        emit(
+          s,
+          "inventory",
+          `smartstore/floor/${item.id}/cleared`,
+          `${personName(s.people.find((p) => p.id === a.people[0])!)} cleared the aisle. ${product.name} ${wasted ? "recorded as waste" : "returned to the display"}.`,
+          product.department,
+        );
+      }
+    }
+  } else if (!cancelled && a.kind === "tidy")
+    emit(
+      s,
+      "operations",
+      `display/${a.target}/tidied`,
+      "A colleague straightened the display. Looking lovely!",
+      a.target,
+    );
+  else if (!cancelled && a.kind === "chat")
+    emit(
+      s,
+      "operations",
+      "people/conversation/finished",
+      "A friendly chat, then back to the shopping.",
+      `person:${a.people[0]}`,
+    );
+  for (const id of a.people) {
+    const p = s.people.find((p) => p.id === id)!;
+    p.activityId = undefined;
+    p.destination = null;
+    p.route = [];
+    if (p.role === "shopper") shopNext(s, p);
+    else {
+      p.stage = "working";
+      p.timer = 0;
+    }
+  }
+}
+function activityStep(s: StoreState, dt: number) {
+  for (const a of s.activities.filter(
+    (a) => a.stage === "active" || a.stage === "approaching",
+  )) {
+    const people = a.people.map((id) => s.people.find((p) => p.id === id)!);
+    if (a.stage === "approaching") {
+      if (s.time > a.deadline) {
+        finishActivity(s, a, true);
+        continue;
+      }
+      if (people.some((p) => travelling(p))) continue;
+      a.stage = "active";
+      emit(
+        s,
+        "operations",
+        `people/${a.kind}/started`,
+        a.kind === "chat"
+          ? `${people.map(personName).join(" and ")} stopped for a friendly chat.`
+          : a.kind === "dance"
+            ? `${personName(people[0])} found their favourite tune!`
+            : `${personName(people[0])} is ${a.kind === "cleanup" ? "clearing the aisle" : "tidying the display"}.`,
+        a.target ?? `person:${people[0].id}`,
+      );
+    }
+    a.remaining -= dt;
+    if (a.remaining <= 0) finishActivity(s, a);
+  }
+  // Bound completed visual history while retaining every live activity and floor unit.
+  s.activities = s.activities.filter(
+    (a) =>
+      a.stage === "active" ||
+      a.stage === "approaching" ||
+      s.time - a.startedAt < 60,
+  );
+  s.floorItems = s.floorItems.filter(
+    (i) => i.status !== "cleared" || s.time - (i.clearedAt ?? s.time) < 10,
+  );
+}
+function startChat(s: StoreState, p: Person, nearbyOnly = false) {
+  if (!canPlay(p)) return false;
+  const partner = s.people
+    .filter(
+      (o) =>
+        o.id !== p.id &&
+        canPlay(o) &&
+        (!nearbyOnly ||
+          Math.hypot(
+            o.position[0] - p.position[0],
+            o.position[1] - p.position[1],
+          ) < 7),
+    )
+    .sort(
+      (a, b) =>
+        Math.hypot(
+          a.position[0] - p.position[0],
+          a.position[1] - p.position[1],
+        ) -
+        Math.hypot(
+          b.position[0] - p.position[0],
+          b.position[1] - p.position[1],
+        ),
+    )[0];
+  if (!partner) return false;
+  const spots: Point[] = [
+    [1.7, 0],
+    [-1.7, 0],
+    [0, 1.7],
+    [0, -1.7],
+  ].map(([x, z]) => [partner.position[0] + x, partner.position[1] + z]);
+  const spot = spots.find(
+    (spot) =>
+      !blocked(...spot) &&
+      s.people
+        .filter((o) => o.id !== p.id && o.stage !== "outside")
+        .every(
+          (o) =>
+            Math.hypot(o.position[0] - spot[0], o.position[1] - spot[1]) >=
+            PERSON_SPACING + 0.08,
+        ) &&
+      routeBetween(
+        p.position,
+        spot,
+        otherPeople(s, p).map((o) => o.position),
+      ).length,
+  );
+  if (!spot) return false;
+  const lines = [
+    "Tea or coffee?",
+    "Those croissants!",
+    "Lovely weather!",
+    "Found a good deal?",
+    "Nice basket!",
+  ];
+  const a = beginActivity(
+    s,
+    "chat",
+    [p, partner],
+    undefined,
+    lines[Math.floor(random(s) * lines.length)],
+  );
+  if (!a) return false;
+  go(s, p, spot, true);
+  return true;
+}
+function dropItem(s: StoreState, departmentId: string) {
+  if (s.floorItems.filter((i) => i.status !== "cleared").length >= 2)
+    return false;
+  const products = s.products.filter(
+    (p) => p.department === departmentId && stock(s, p.id).shelf > 0,
+  );
+  if (!products.length) return false;
+  const product = products[Math.floor(random(s) * products.length)];
+  const batch = s.batches.find(
+    (b) => b.productId === product.id && b.shelf > 0 && b.expiresAt > s.time,
+  );
+  if (!batch) return false;
+  batch.shelf--;
+  batch.onFloor++;
+  const item: FloorItem = {
+    id: s.nextFloorItem++,
+    batchId: batch.id,
+    productId: product.id,
+    position: [product.position[0] + 0.45, product.position[1] + 0.35],
+    at: s.time,
+    status: "waiting",
+  };
+  s.floorItems.push(item);
+  emit(
+    s,
+    "iot",
+    `smartstore/floor/${item.id}/detected`,
+    `Oops! ${product.name} took a tumble. The store sensor flagged it for cleanup.`,
+    departmentId,
+  );
+  emit(
+    s,
+    "inventory",
+    `stock/${product.id}/floor-updated`,
+    "One item moved from shelf stock to the floor; saleable stock updated.",
+    departmentId,
+  );
+  return true;
+}
+function requestCleanup(s: StoreState, item: FloorItem) {
+  if (item.status !== "waiting") return false;
+  const colleague = s.people
+    .filter((p) => p.role === "employee" && canPlay(p))
+    .sort(
+      (a, b) =>
+        Math.hypot(
+          a.position[0] - item.position[0],
+          a.position[1] - item.position[1],
+        ) -
+        Math.hypot(
+          b.position[0] - item.position[0],
+          b.position[1] - item.position[1],
+        ),
+    )[0];
+  if (!colleague) return false;
+  const a = beginActivity(
+    s,
+    "cleanup",
+    [colleague],
+    String(item.id),
+    "I've got it!",
+  );
+  if (!a) return false;
+  item.status = "assigned";
+  go(s, colleague, item.position);
+  emit(
+    s,
+    "agents",
+    `smartstore/floor/${item.id}/cleanup-assigned`,
+    `${personName(colleague)} is on the way to tidy the aisle.`,
+    s.products.find((p) => p.id === item.productId)!.department,
+  );
+  return true;
+}
+export function interact(
+  s: StoreState,
+  command: StoreCommand,
+): { ok: boolean; message: string } {
+  const p =
+    "personId" in command
+      ? s.people.find((p) => p.id === command.personId)
+      : undefined;
+  if (command.type === "wave") {
+    if (!p || p.stage === "outside")
+      return { ok: false, message: "They are outside just now." };
+    p.waveUntil = s.time + 3;
+    emit(
+      s,
+      "operations",
+      `people/${p.id}/waved`,
+      `${personName(p)} says hello!`,
+      `person:${p.id}`,
+    );
+    return { ok: true, message: `${personName(p)} says hello!` };
+  }
+  if (command.type === "chat") {
+    const ok = !!p && startChat(s, p);
+    return {
+      ok,
+      message: ok
+        ? "A friendly chat is on the way."
+        : "They are busy. Try a shopper browsing an aisle.",
+    };
+  }
+  if (command.type === "dance") {
+    const ok =
+      !!p && !!beginActivity(s, "dance", [p], undefined, "Happy feet!");
+    return {
+      ok,
+      message: ok
+        ? "A tiny dance break!"
+        : "Let them finish their current job first.",
+    };
+  }
+  if (command.type === "wobble") {
+    const ok = dropItem(s, command.departmentId);
+    return {
+      ok,
+      message: ok
+        ? "Oops! Watch the tidy-up crew."
+        : "Let's clear the current mishaps before another wobble.",
+    };
+  }
+  if (command.type === "cleanup") {
+    const item = s.floorItems.find((i) => i.id === command.itemId);
+    const ok = !!item && requestCleanup(s, item);
+    return {
+      ok,
+      message: ok
+        ? "A colleague is on the way to help."
+        : item?.status === "assigned"
+          ? "A colleague is already on the way."
+          : "The team will help as soon as a colleague is free.",
+    };
+  }
+  const department = DEPARTMENTS.find((d) => d.id === command.departmentId);
+  if (!department) return { ok: false, message: "Choose a department first." };
+  const candidates = s.people.filter(
+    (person) =>
+      canPlay(person) &&
+      (command.type === "browse"
+        ? person.role === "shopper"
+        : person.role === "employee") &&
+      (command.personId === undefined || person.id === command.personId),
+  );
+  candidates.sort(
+    (a, b) =>
+      Math.hypot(
+        a.position[0] - department.position[0],
+        a.position[1] - department.position[1],
+      ) -
+      Math.hypot(
+        b.position[0] - department.position[0],
+        b.position[1] - department.position[1],
+      ),
+  );
+  const actor = candidates[0];
+  if (!actor)
+    return {
+      ok: false,
+      message: "Everyone is busy just now. Try again in a moment.",
+    };
+  if (command.type === "browse") {
+    if (actor.list.length > 10)
+      return { ok: false, message: "Let them finish a little shopping first." };
+    const product = s.products.find(
+      (p) => p.department === department.id && stock(s, p.id).shelf > 0,
+    );
+    if (!product)
+      return { ok: false, message: "This shelf is awaiting fresh stock." };
+    actor.list.splice(actor.visited, 0, product.id);
+    shopNext(s, actor);
+    emit(
+      s,
+      "operations",
+      `people/${actor.id}/browsing`,
+      `${personName(actor)} is heading to ${department.name.toLowerCase()}.`,
+      department.id,
+    );
+  } else {
+    if (!beginActivity(s, "tidy", [actor], department.id, "Looking lovely!"))
+      return { ok: false, message: "They are busy." };
+    go(s, actor, [department.position[0], department.position[1] + 2]);
+  }
+  return {
+    ok: true,
+    message: `${personName(actor)} is on the way to ${department.name.toLowerCase()}.`,
+  };
+}
+function ambientStep(s: StoreState) {
+  if (s.time >= s.nextSocialAt) {
+    if (
+      s.activities.filter(
+        (a) => a.stage === "active" || a.stage === "approaching",
+      ).length < 2
+    ) {
+      const people = s.people.filter((p) => canPlay(p));
+      if (people.length)
+        startChat(s, people[Math.floor(random(s) * people.length)], true);
+    }
+    s.nextSocialAt = s.time + 18 + random(s) * 12;
+  }
+  if (s.time >= s.nextMishapAt) {
+    const person = s.people.find((p) => p.stage === "picking");
+    const product =
+      person && s.products.find((v) => v.id === person.list[person.visited]);
+    dropItem(
+      s,
+      product?.department ??
+        DEPARTMENTS[Math.floor(random(s) * DEPARTMENTS.length)].id,
+    );
+    s.nextMishapAt = s.time + 35 + random(s) * 20;
+  }
+  for (const item of s.floorItems)
+    if (item.status === "waiting") requestCleanup(s, item);
 }

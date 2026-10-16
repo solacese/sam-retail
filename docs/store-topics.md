@@ -24,3 +24,5 @@ abc/retail/v1/fr/paris-flagship/agent/restock/approved
 Future Solace subscriptions could use `abc/retail/v1/fr/paris-flagship/stock/>`, `abc/retail/v1/fr/paris-flagship/price/*/updated` or `abc/retail/v1/*/*/fridge/>`. In this demo the drawer filters by the event category; no subscriptions are installed on an external broker.
 
 Events have an increasing local `id`, simulation timestamp `at`, `category`, `topic`, readable `message`, and optional fixture `target`. The latest 600 are retained, newest first. Stock, purchase, pricing and device events describe the same state used by the scene and inspectors.
+
+Shop-life interactions also emit `people/{id}/waved`, `people/{id}/browsing`, `people/{chat|dance|tidy|cleanup}/started`, `people/conversation/finished`, `display/{department}/tidied`, and `smartstore/floor/{id}/{detected|cleanup-assigned|cleared}` under the same `abc/retail/v1/fr/paris-flagship/` prefix. Floor events demonstrate successful sensor detection, stock updates and staff coordination.
