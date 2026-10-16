@@ -928,7 +928,7 @@ test("a selected shopper can put a real basket item on the floor", async ({
   ).toHaveCount(1);
 });
 
-test("an unpaid exit reaches the sensor and the guard resolves the actual basket", async ({
+test("an unpaid exit sends the shopper back to an open till before payment", async ({
   page,
 }, testInfo) => {
   await resetPausedStore(page);
@@ -955,11 +955,40 @@ test("an unpaid exit reaches the sensor and the guard resolves the actual basket
   await expect(
     pulse
       .locator(".pulse-event")
-      .filter({ hasText: "Unpaid basket paid on Rémi's handheld" }),
+      .filter({ hasText: "Rémi sent Inès back to open checkout" })
+      .filter({ hasText: "returned-to-checkout" }),
+  ).toBeVisible({ timeout: 35000 });
+  await pause(page);
+  await selectPerson(page, "Inès");
+  await expect(page.getByTestId("person-activity")).toHaveText(
+    "Waiting for a checkout",
+  );
+  await expect(page.locator(".person-basket")).toContainText(
+    "IN THE BASKET · 2",
+  );
+  await page
+    .getByRole("button", { name: "Close inspector", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Security", exact: true }).click();
+  await expect(page.locator(".life-outcome")).toContainText(
+    "Payment still pending",
+  );
+  await page
+    .getByRole("button", { name: "Close inspector", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Play simulation", exact: true })
+    .click();
+  await expect(
+    pulse
+      .locator(".pulse-event")
+      .filter({ hasText: /Inès paid at checkout \d\. All sorted!/ }),
   ).toBeVisible({ timeout: 35000 });
   await pause(page);
   await page.getByRole("button", { name: "Security", exact: true }).click();
-  await expect(page.locator(".life-outcome")).toContainText("All sorted!");
+  await expect(page.locator(".life-outcome")).toContainText(
+    /Inès paid at checkout \d\. All sorted!/,
+  );
   await page.screenshot({
     path: `/tmp/abc-unpaid-exit-${testInfo.project.name}.png`,
   });
@@ -978,5 +1007,10 @@ test("an unpaid exit reaches the sensor and the guard resolves the actual basket
     page
       .locator(".stream-event")
       .filter({ hasText: "purchase/assisted/completed" }),
-  ).toHaveCount(1);
+  ).toHaveCount(0);
+  await expect(
+    page
+      .locator(".stream-event")
+      .filter({ hasText: "purchase/till/completed" }),
+  ).not.toHaveCount(0);
 });

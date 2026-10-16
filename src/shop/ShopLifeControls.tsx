@@ -140,7 +140,7 @@ export function SecurityInspector({ state, command, onClose }: Props) {
             {personName(shopper!)} ·{" "}
             {c.kind === "receipt"
               ? c.origin === "exit-attempt"
-                ? `Exit, basket and purchase events show ${shopper!.basket.reduce((n, l) => n + l.quantity, 0)} unpaid items and no matching payment. Rémi can help put it right.`
+                ? `Exit, basket and purchase events show ${shopper!.basket.reduce((n, l) => n + l.quantity, 0)} unpaid items and no matching payment. Rémi will send the shopper back to an open checkout.`
                 : "Basket and receipt events show one unscanned item. Rémi can check and offer handheld payment."
               : c.kind === "bag"
                 ? `The bag is already paid. Receipt #${c.transactionId} helps Rémi find its owner.`

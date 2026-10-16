@@ -903,7 +903,7 @@ describe("player mischief and emergent stories", () => {
     expect(batch.onFloor).toBe(0);
     conservation(s);
   });
-  it("detects an attempted unpaid exit only at the exit, then settles exactly the held goods", () => {
+  it("detects an unpaid exit, sends the shopper to an open till, and charges the held goods only there", () => {
     const s = createStore(),
       p = s.people.find((p) => p.stage === "queueing")!;
     s.nextEmergentAt =
@@ -913,6 +913,7 @@ describe("player mischief and emergent stories", () => {
         Infinity;
     const basket = structuredClone(p.basket),
       position = [...p.position];
+    s.checkouts = [false, true, false];
     expect(interact(s, { type: "attempt-unpaid", personId: p.id }).ok).toBe(
       true,
     );
@@ -936,23 +937,54 @@ describe("player mischief and emergent stories", () => {
         ),
     ).toBeLessThan(0.05);
     until(s, () => c.stage === "resolved");
-    const payments = s.transactions.filter((t) => t.source === "assisted");
-    expect(payments).toHaveLength(1);
-    expect(payments[0].lines.reduce((n, l) => n + l.quantity, 0)).toBe(
-      basket.reduce((n, l) => n + l.quantity, 0),
+    expect(p.stage).toBe("queueing");
+    expect(p.checkout).toBe(1);
+    expect(c.checkout).toBe(1);
+    expect(s.checkouts[p.checkout]).toBe(true);
+    expect(c.outcome).toContain("Payment still pending");
+    expect(interact(s, { type: "attempt-unpaid", personId: p.id }).ok).toBe(
+      false,
     );
+    expect(c.paymentTransactionId).toBeUndefined();
+    expect(p.basket).toEqual(basket);
+    expect(s.transactions.filter((t) => t.source === "assisted")).toHaveLength(
+      0,
+    );
+    conservation(s);
+    until(s, () => p.stage === "paying");
+    expect(p.basket).toEqual(basket);
+    expect(c.paymentTransactionId).toBeUndefined();
+    until(s, () => !!c.paymentTransactionId);
+    const payment = s.transactions.find(
+      (t) => t.id === c.paymentTransactionId,
+    )!;
+    expect(payment.source).toBe("till");
+    expect(payment.lines).toEqual(
+      basket.map((l) => ({
+        productId: l.productId,
+        quantity: l.quantity,
+        unitPrice: s.products.find((p) => p.id === l.productId)!.price,
+      })),
+    );
+    expect(c.outcome).toContain("paid at checkout 2. All sorted!");
     expect(p.basket).toHaveLength(0);
     const ids = [
-      "exit-attempt/started",
-      "/detected",
-      "/correlated",
-      "/assigned",
-      "/checking",
-      "purchase/assisted/completed",
-      "/resolved",
-    ].map((part) => s.events.find((e) => e.topic.includes(part))!.id);
+      `people/${p.id}/exit-attempt/started`,
+      `camera/exit/unpaid/${p.id}/detected`,
+      `security/case/${c.id}/correlated`,
+      `security/case/${c.id}/assigned`,
+      `security/case/${c.id}/checking`,
+      `security/case/${c.id}/returned-to-checkout`,
+      `security/case/${c.id}/resolved`,
+      `security/case/${c.id}/paid`,
+    ].map((part) => s.events.find((e) => e.topic.endsWith(part))!.id);
     for (let i = 1; i < ids.length; i++)
       expect(ids[i]).toBeGreaterThan(ids[i - 1]);
+    const count = s.transactions.length;
+    expect(interact(s, { type: "security-check", caseId: c.id }).ok).toBe(
+      false,
+    );
+    expect(s.transactions).toHaveLength(count);
     conservation(s);
   });
   it("refuses empty baskets and busy guards without altering inventory", () => {

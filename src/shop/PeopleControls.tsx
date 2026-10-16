@@ -161,13 +161,16 @@ export function PersonInspector({
                   !p.basket.length ||
                   !canDirectPerson(p) ||
                   !!activeSecurityCase(state) ||
+                  !!p.securityVisited ||
                   state.people.some((p) => p.exitAttempt) ||
                   (p.mischiefUntil ?? 0) > state.time
                 }
                 title={
-                  p.basket.length
-                    ? "Try an unpaid exit in the shop simulation"
-                    : "Pick up some groceries first"
+                  p.securityVisited
+                    ? "Rémi is waiting for this shopper to pay at the checkout"
+                    : p.basket.length
+                      ? "Try an unpaid exit in the shop simulation"
+                      : "Pick up some groceries first"
                 }
                 onClick={() =>
                   command({ type: "attempt-unpaid", personId: id })

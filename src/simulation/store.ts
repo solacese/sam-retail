@@ -183,6 +183,8 @@ export interface SecurityCase {
   shopperId: number;
   transactionId: number;
   origin?: "exit-attempt";
+  checkout?: number;
+  paymentTransactionId?: number;
   stage: "waiting" | "approaching" | "checking" | "resolved";
   at: number;
   timer: number;
@@ -2149,6 +2151,12 @@ function attemptUnpaidExit(
       ok: false,
       message: "Rémi is helping someone. Try again after this little check.",
     };
+  if (p.securityVisited)
+    return {
+      ok: false,
+      message:
+        "Rémi has already sent this shopper to a checkout. Let them pay first.",
+    };
   prepareDirection(s, p);
   p.stage = "leaving";
   p.exitAttempt = true;
@@ -2409,6 +2417,24 @@ function leaveCheckout(s: StoreState, p: Person) {
     .filter((l) => l.quantity > 0);
   settle(s, paid, "till", "inBaskets");
   p.basket = held;
+  const returnedCase = s.securityCases.findLast(
+    (c) =>
+      p.securityVisited &&
+      c.shopperId === p.id &&
+      c.checkout !== undefined &&
+      !c.paymentTransactionId,
+  );
+  if (returnedCase && paid.length && !held.length) {
+    returnedCase.paymentTransactionId = s.transactions.at(-1)!.id;
+    returnedCase.outcome = `${personName(p)} paid at checkout ${p.checkout + 1}. All sorted!`;
+    emit(
+      s,
+      "operations",
+      `security/case/${returnedCase.id}/paid`,
+      returnedCase.outcome,
+      "checkouts",
+    );
+  }
   p.stage = "leaving";
   if (!eligible) {
     go(s, p, ENTRY, true);
@@ -2463,6 +2489,7 @@ function checkReceipt(s: StoreState, c: SecurityCase) {
 }
 function finishSecurity(s: StoreState, c: SecurityCase, checkout = false) {
   if (c.stage === "resolved") return;
+  checkout ||= c.origin === "exit-attempt";
   const shopper = s.people.find((p) => p.id === c.shopperId)!,
     guard = s.people.find((p) => p.job === "security")!;
   if (c.kind === "receipt" && !checkout) {
@@ -2470,22 +2497,39 @@ function finishSecurity(s: StoreState, c: SecurityCase, checkout = false) {
     shopper.basket = [];
   }
   c.stage = "resolved";
+  if (checkout) {
+    joinQueue(s, shopper);
+    c.checkout = shopper.checkout;
+  }
   c.outcome = checkout
-    ? "Shopper guided back to a staffed checkout."
+    ? `Rémi sent ${personName(shopper)} back to open checkout ${shopper.checkout + 1}. Payment still pending.`
     : c.kind === "receipt"
-      ? c.origin === "exit-attempt"
-        ? "Unpaid basket paid on Rémi's handheld. All sorted!"
-        : "Missed item paid on Rémi's handheld. All sorted!"
+      ? "Missed item paid on Rémi's handheld. All sorted!"
       : c.kind === "bag"
         ? "Forgotten paid bag returned. A happy goodbye!"
         : "All items paid. Thank you, and have a lovely day!";
   s.securityCompleted++;
   s.nextSecurityAt = s.time + 24;
   shopper.securityCaseId = guard.securityCaseId = undefined;
-  shopper.reaction = { text: "Thank you, Rémi!", until: s.time + 5 };
+  shopper.reaction = {
+    text: checkout ? "Back to the till!" : "Thank you, Rémi!",
+    until: s.time + 5,
+  };
   shopper.waveUntil = guard.waveUntil = s.time + 3;
-  guard.reaction = { text: "All sorted! Lovely day!", until: s.time + 4 };
-  if (checkout) joinQueue(s, shopper);
+  guard.reaction = {
+    text: checkout
+      ? `Checkout ${shopper.checkout + 1}, please!`
+      : "All sorted! Lovely day!",
+    until: s.time + 4,
+  };
+  if (checkout)
+    emit(
+      s,
+      "operations",
+      `security/case/${c.id}/returned-to-checkout`,
+      c.outcome,
+      "checkouts",
+    );
   else {
     shopper.stage = "leaving";
     go(s, shopper, ENTRY, true);
