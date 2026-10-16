@@ -666,7 +666,7 @@ test("select beside a shopper, then tap the floor and a shelf to direct that sam
   }
   if (testInfo.project.name !== "desktop") {
     const panel = (await page.locator(".store-sidebar").boundingBox())!;
-    expect(panel.height).toBeLessThan(270);
+    expect(panel.height).toBeLessThan(310);
     await expect(
       menu.getByRole("button", { name: "More actions", exact: true }),
     ).toBeVisible();
@@ -702,4 +702,193 @@ test("select beside a shopper, then tap the floor and a shelf to direct that sam
   await page.screenshot({
     path: `/tmp/abc-point-click-${testInfo.project.name}.png`,
   });
+});
+
+async function resetPausedStore(page: Page) {
+  await openStore(page);
+  await pause(page);
+  await page.getByRole("button", { name: "Reset store", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Reset store", exact: true })
+    .click();
+  await page.waitForTimeout(300);
+}
+test("the shop screen changes a campaign, real prices and shopper routes", async ({
+  page,
+}, testInfo) => {
+  await resetPausedStore(page);
+  const canvas = page.locator("canvas");
+  if (await canvas.count()) {
+    const box = (await canvas.boundingBox())!;
+    const camera = new OrthographicCamera(
+      -box.width / 2,
+      box.width / 2,
+      box.height / 2,
+      -box.height / 2,
+      0.1,
+      150,
+    );
+    camera.position.set(35, 43, 45);
+    camera.lookAt(0, 0, 1.5);
+    camera.zoom = Math.min(
+      box.width / (box.width < 700 ? 59 : 58),
+      box.height / 35,
+    );
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+    const point = new Vector3(-15, 2.6, 15).project(camera),
+      position = {
+        x: ((point.x + 1) * box.width) / 2,
+        y: ((1 - point.y) * box.height) / 2,
+      };
+    if (testInfo.project.name === "desktop") await canvas.click({ position });
+    else await canvas.tap({ position });
+  } else
+    await page.getByRole("button", { name: "Promotions", exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "Promotion screen" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /^Lunch picks/ }).click();
+  await expect(page.getByRole("status")).toContainText("Screen updated");
+  if (
+    await page
+      .getByRole("button", { name: "Close inspector", exact: true })
+      .isVisible()
+  )
+    await page
+      .getByRole("button", { name: "Close inspector", exact: true })
+      .click();
+  await page
+    .locator(".department-button")
+    .filter({ hasText: "Bakery" })
+    .click();
+  await expect(page.getByText(/€3.82 · deal/)).toBeVisible();
+  await page
+    .getByRole("button", { name: "Close inspector", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Promotions", exact: true }).click();
+  await expect(page.locator(".life-display")).toContainText(
+    "Lunch picks · −15%",
+  );
+  await expect(
+    page.getByRole("button", { name: /^Lunch picks/ }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.screenshot({
+    path: `/tmp/abc-promotions-${testInfo.project.name}.png`,
+  });
+  await page
+    .getByRole("button", { name: "Close inspector", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Events", exact: true }).click();
+  await page.getByRole("button", { name: "Operations", exact: true }).click();
+  await expect(
+    page.locator(".stream-event").filter({ hasText: "noticed the screen" }),
+  ).toHaveCount(2);
+});
+test("a shopper need sends a real guide to the aisle and is fulfilled by picking groceries", async ({
+  page,
+}, testInfo) => {
+  await resetPausedStore(page);
+  await selectPerson(page);
+  await page
+    .getByRole("button", { name: "Help find coffee", exact: true })
+    .click();
+  await expect(page.getByTestId("person-activity")).toHaveText(
+    "Following a colleague to the right aisle",
+  );
+  await expect(
+    page.getByRole("button", {
+      name: "On the way to a good find",
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await page
+    .getByRole("button", { name: "Close inspector", exact: true })
+    .click();
+  const pulse = page.getByRole("complementary", {
+    name: "Live store information",
+  });
+  await pulse
+    .getByRole("combobox", { name: "Filter live events" })
+    .selectOption("operations");
+  await page.getByRole("button", { name: "2×", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Play simulation", exact: true })
+    .click();
+  await expect(
+    pulse
+      .locator(".pulse-event")
+      .filter({ hasText: "Mia found coffee and added it to the basket" }),
+  ).toBeVisible({ timeout: 35000 });
+  await pause(page);
+  await selectPerson(page);
+  await expect(page.locator(".person-basket")).toContainText("Coffee");
+  await page.screenshot({
+    path: `/tmp/abc-shopper-help-${testInfo.project.name}.png`,
+  });
+});
+test("the security guard walks over and settles a missed item only once", async ({
+  page,
+}, testInfo) => {
+  await resetPausedStore(page);
+  const pulse = page.getByRole("complementary", {
+    name: "Live store information",
+  });
+  await pulse
+    .getByRole("combobox", { name: "Filter live events" })
+    .selectOption("iot");
+  await page.getByRole("button", { name: "2×", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Play simulation", exact: true })
+    .click();
+  await expect(
+    pulse
+      .locator(".pulse-event")
+      .filter({ hasText: "one item still needs paying" }),
+  ).toBeVisible({ timeout: 12000 });
+  await pause(page);
+  await page.getByRole("button", { name: "Security", exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "Friendly security" }),
+  ).toContainText("One item still needs paying");
+  await page
+    .getByRole("button", { name: "Make a friendly receipt check", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText("Rémi is on the way");
+  if (
+    await page
+      .getByRole("button", { name: "Close inspector", exact: true })
+      .isVisible()
+  )
+    await page
+      .getByRole("button", { name: "Close inspector", exact: true })
+      .click();
+  await pulse
+    .getByRole("combobox", { name: "Filter live events" })
+    .selectOption("operations");
+  await page
+    .getByRole("button", { name: "Play simulation", exact: true })
+    .click();
+  await expect(
+    pulse
+      .locator(".pulse-event")
+      .filter({ hasText: "Missed item paid on Rémi's handheld" }),
+  ).toBeVisible({ timeout: 35000 });
+  await pause(page);
+  await page.getByRole("button", { name: "Security", exact: true }).click();
+  await expect(page.locator(".life-outcome")).toContainText("All sorted!");
+  await page.screenshot({
+    path: `/tmp/abc-security-${testInfo.project.name}.png`,
+  });
+  await page
+    .getByRole("button", { name: "Close inspector", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Events", exact: true }).click();
+  await page.getByRole("button", { name: "Purchases", exact: true }).click();
+  await expect(
+    page
+      .locator(".stream-event")
+      .filter({ hasText: "purchase/assisted/completed" }),
+  ).toHaveCount(1);
 });

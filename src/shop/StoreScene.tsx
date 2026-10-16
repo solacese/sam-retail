@@ -22,6 +22,10 @@ import {
   FLOOR,
   FIXTURE_WIDTH,
   personName,
+  needText,
+  activeSecurityCase,
+  PROMOTION_SCREEN,
+  RECEIPT_POINT,
   type FloorItem,
   type Point,
   stock,
@@ -149,6 +153,67 @@ function Sign({
         toneMapped={false}
       />
     </mesh>
+  );
+}
+function PromotionDisplay({
+  state,
+  onSelect,
+}: {
+  state: StoreState;
+  onSelect: (id: string) => void;
+}) {
+  const bakery = state.promotion === "bakery",
+    lunch = state.promotion === "lunch";
+  return (
+    <group
+      position={[PROMOTION_SCREEN[0], 0, PROMOTION_SCREEN[1]]}
+      userData={{ departmentId: "promotions" }}
+      onClick={(e) => {
+        if (e.delta > 5) return;
+        e.stopPropagation();
+        onSelect("promotions");
+      }}
+      onPointerOver={() => {
+        document.body.style.cursor = "pointer";
+      }}
+      onPointerOut={() => {
+        document.body.style.cursor = "";
+      }}
+    >
+      <SoftBox at={[0, 0.14, 0]} size={[4.5, 0.28, 0.75]} color={WOOD} />
+      <Box at={[0, 1, 0]} size={[0.24, 1.8, 0.24]} color={GREEN} />
+      <Billboard position={[0, 2.6, 0]}>
+        <SoftBox at={[0, 0, 0]} size={[5.5, 3.25, 0.25]} color={GREEN} />
+        <Box at={[0, 0, 0.14]} size={[5.1, 2.85, 0.03]} color="#e4edcf" />
+        <Sign
+          text="TODAY AT ABC SHOP"
+          at={[0, 1.02, 0.18]}
+          width={4.6}
+          small
+          background="#e4edcf"
+        />
+        <Sign
+          text={bakery ? "20% OFF" : lunch ? "15% OFF" : "HELLO, NEIGHBOUR!"}
+          at={[0, 0.12, 0.18]}
+          width={4.6}
+          background="#e4edcf"
+          color={bakery || lunch ? "#a56a3f" : GREEN}
+        />
+        <Sign
+          text={
+            bakery
+              ? "BAKERY TREATS"
+              : lunch
+                ? "SANDWICH · SALAD · JUICE"
+                : "CLICK TO PICK A PROMOTION"
+          }
+          at={[0, -0.83, 0.18]}
+          width={4.6}
+          small
+          background="#e4edcf"
+        />
+      </Billboard>
+    </group>
   );
 }
 function DealFlag({
@@ -436,9 +501,7 @@ function DepartmentFixture({
             at={[p.position[0], 0.45, z + 0.92]}
             width={1.65}
             small
-            color={
-              state.mealActive && department.id === "bakery" ? "#a15b3c" : GREEN
-            }
+            color={p.price < p.regularPrice ? "#a15b3c" : GREEN}
           />
         ))}
       {kind === "produce" &&
@@ -496,9 +559,10 @@ function DepartmentFixture({
           />
         </>
       )}
-      {state.mealActive && department.id === "bakery" && (
-        <DealFlag at={[x, 3.6, z]} store={state} />
-      )}
+      {(state.mealActive || state.promotion === "bakery") &&
+        department.id === "bakery" && (
+          <DealFlag at={[x, 3.6, z]} store={state} />
+        )}
       {(selected || flash) && (
         <mesh position={[x, 0.025, z]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[FIXTURE_WIDTH + 0.5, 2.6]} />
@@ -739,6 +803,20 @@ function Human({
     if (p.stage === "paying") angle.current = -Math.PI / 2;
     if (p.role === "employee" && p.stage === "working" && !walking)
       angle.current = p.id < 102 || task?.kind === "checkout" ? 0 : Math.PI;
+    const receipt = store.current.securityCases.find(
+      (c) => c.id === p.securityCaseId && c.stage === "checking",
+    );
+    if (receipt) {
+      const partner = store.current.people.find((other) =>
+        p.job === "security"
+          ? other.id === receipt.shopperId
+          : other.job === "security",
+      )!;
+      angle.current = Math.atan2(
+        partner.position[0] - p.position[0],
+        partner.position[1] - p.position[1],
+      );
+    }
     root.current.rotation.y +=
       Math.atan2(
         Math.sin(angle.current - root.current.rotation.y),
@@ -769,6 +847,8 @@ function Human({
       : gesture && p.role === "employee" && !walking
         ? -0.5 + Math.sin(idlePhase + 1) * 0.2
         : 0;
+    if (receipt && gesture)
+      rightArm.current.rotation.x = -0.8 + Math.sin(idlePhase) * 0.05;
     head.current.position.y =
       1.39 + (gesture && !walking ? Math.sin(idlePhase * 0.6) * 0.013 : 0);
     head.current.rotation.z =
@@ -825,7 +905,15 @@ function Human({
           ? Math.abs(Math.sin(phase)) * 0.025
           : 0;
   });
-  const employee = person.role === "employee";
+  const employee = person.role === "employee",
+    guard = person.job === "security";
+  const security = activeSecurityCase(store.current);
+  const storyText =
+    person.reaction && person.reaction.until > store.current.time
+      ? person.reaction.text
+      : person.need?.status === "waiting" && !activity
+        ? needText(person)
+        : undefined;
   return (
     <group
       ref={root}
@@ -834,7 +922,7 @@ function Human({
       onClick={(e) => {
         if (e.delta > 5) return;
         e.stopPropagation();
-        onSelect(`person:${id}`);
+        onSelect(guard ? "security" : `person:${id}`);
       }}
       onPointerOver={(e) => {
         e.stopPropagation();
@@ -884,7 +972,7 @@ function Human({
           size={[0.56, 0.66, 0.35]}
           color={person.outfit}
         />
-        {employee && (
+        {employee && !guard && (
           <>
             <Box
               at={[0, 0.75, 0.19]}
@@ -904,6 +992,24 @@ function Human({
             <meshStandardMaterial color={person.skin} />
           </mesh>
           <Hair id={id} />
+          {guard && (
+            <group>
+              <SoftBox
+                at={[0, 0.28, 0]}
+                size={[0.67, 0.14, 0.62]}
+                color="#526c83"
+              />
+              <SoftBox
+                at={[0, 0.23, 0.28]}
+                size={[0.61, 0.07, 0.3]}
+                color="#3c566d"
+              />
+              <mesh position={[0, 0.29, 0.32]}>
+                <circleGeometry args={[0.055, 8]} />
+                <meshBasicMaterial color="#edcb77" />
+              </mesh>
+            </group>
+          )}
           <group ref={eyes}>
             {[-0.11, 0.11].map((x) => (
               <mesh key={x} position={[x, 0.02, 0.29]}>
@@ -942,6 +1048,36 @@ function Human({
           />
         </group>
         <group ref={rightArm} position={[0.36, 1.05, 0]}>
+          {guard && security?.stage === "checking" && (
+            <group position={[0, -0.35, 0.13]}>
+              {security.kind === "bag" ? (
+                <>
+                  <SoftBox
+                    at={[0, -0.08, 0]}
+                    size={[0.5, 0.5, 0.35]}
+                    color="#c49a5c"
+                  />
+                  <mesh position={[0, 0.2, 0]}>
+                    <torusGeometry args={[0.15, 0.025, 6, 12, Math.PI]} />
+                    <meshStandardMaterial color="#866841" />
+                  </mesh>
+                </>
+              ) : (
+                <>
+                  <SoftBox
+                    at={[0, 0, 0]}
+                    size={[0.2, 0.3, 0.06]}
+                    color="#3b554b"
+                  />
+                  <Box
+                    at={[0, 0.02, 0.04]}
+                    size={[0.15, 0.17, 0.015]}
+                    color="#bdd796"
+                  />
+                </>
+              )}
+            </group>
+          )}
           <SoftBox
             at={[0, -0.2, 0]}
             size={[0.16, 0.42, 0.19]}
@@ -1014,7 +1150,33 @@ function Human({
             />
           </Billboard>
         )}
+      {storyText && (
+        <Billboard position={[0, 2.8, 0]}>
+          <Sign
+            text={storyText}
+            at={[0, 0, 0]}
+            width={4.8}
+            small
+            bubble
+            background="#fff4d8"
+            color="#756044"
+          />
+        </Billboard>
+      )}
+      {guard && (
+        <Billboard position={[0, 2.25, 0]}>
+          <Sign
+            text="RÉMI · SECURITY"
+            at={[0, 0, 0]}
+            width={3.5}
+            small
+            background="#dae3eb"
+            color="#3d5a6e"
+          />
+        </Billboard>
+      )}
       {activity &&
+        !storyText &&
         activity.line &&
         activity.stage === "active" &&
         (activity.kind !== "chat" ||
@@ -1035,7 +1197,7 @@ function Human({
             />
           </Billboard>
         )}
-      {selected && (!activity || activity.kind === "walk") && (
+      {selected && !storyText && (!activity || activity.kind === "walk") && (
         <Billboard position={[0, 2.8, 0]}>
           <Sign
             text={
@@ -1348,6 +1510,24 @@ function World({
         />
       ))}
       <ProductStock state={state} />
+      <PromotionDisplay state={state} onSelect={onSelect} />
+      {activeSecurityCase(state)?.kind === "bag" &&
+        activeSecurityCase(state)?.stage !== "checking" && (
+          <group
+            position={[RECEIPT_POINT[0] - 1.4, 0.35, RECEIPT_POINT[1]]}
+            onClick={(e) => {
+              if (e.delta > 5) return;
+              e.stopPropagation();
+              onSelect("security");
+            }}
+          >
+            <SoftBox at={[0, 0, 0]} size={[0.65, 0.65, 0.45]} color="#c49a5c" />
+            <mesh position={[0, 0.38, 0]}>
+              <torusGeometry args={[0.2, 0.03, 6, 12, Math.PI]} />
+              <meshStandardMaterial color="#866841" />
+            </mesh>
+          </group>
+        )}
       {TILLS.map(([x, z], i) => (
         <group
           key={i}

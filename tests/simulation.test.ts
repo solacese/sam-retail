@@ -9,6 +9,7 @@ import {
   FIXTURE_WIDTH,
   visibleRecommendations,
   decisionImpact,
+  activeSecurityCase,
   metrics,
   routeBetween,
   stock,
@@ -60,11 +61,12 @@ function conservation(s: StoreState) {
   }
 }
 describe("coherent retail simulation", () => {
-  it("starts with 24 products, 12 shoppers and six colleagues", () => {
+  it("starts with 24 products, 12 shoppers, six colleagues and a security guard", () => {
     const s = createStore();
     expect(s.products).toHaveLength(24);
     expect(s.people.filter((p) => p.role === "shopper")).toHaveLength(12);
-    expect(s.people.filter((p) => p.role === "employee")).toHaveLength(6);
+    expect(s.people.filter((p) => p.role === "employee")).toHaveLength(7);
+    expect(s.people.filter((p) => p.job === "security")).toHaveLength(1);
     expect(s.transactions).toHaveLength(0);
     conservation(s);
   });
@@ -205,6 +207,8 @@ describe("retailer outcomes", () => {
   it("an extra staffed checkout reduces experienced waiting", () => {
     const baseline = createStore(),
       extra = createStore();
+    // Isolate service capacity: receipt-check stories change return-visit arrival times.
+    baseline.nextSecurityAt = extra.nextSecurityAt = Infinity;
     decide(extra, "checkout", true);
     run(baseline, 90);
     run(extra, 90);
@@ -673,6 +677,152 @@ describe("point-and-click directions", () => {
       interact(s, { type: "walk", personId: paying.id, position: [-7, 6] }).ok,
     ).toBe(false);
     expect(paying.basket).toEqual(basket);
+    conservation(s);
+  });
+});
+
+describe("promotions, shopper needs and friendly security", () => {
+  function until(s: StoreState, done: () => boolean, seconds = 100) {
+    for (let i = 0; i < seconds * 10 && !done(); i++) advance(s, 0.1);
+    expect(done()).toBe(true);
+  }
+  it("updates one price state and sends real shoppers towards the screen's offer", () => {
+    const s = createStore(),
+      before = structuredClone(s.batches);
+    expect(interact(s, { type: "promotion", promotion: "lunch" }).ok).toBe(
+      true,
+    );
+    for (const product of s.products)
+      expect(product.price).toBe(
+        Math.round(
+          product.regularPrice *
+            (["sku-6", "sku-11", "sku-16"].includes(product.id) ? 0.85 : 1),
+        ),
+      );
+    expect(
+      s.people.filter((p) => p.reaction?.text.includes("tasty")),
+    ).toHaveLength(2);
+    expect(s.people[0].list[0]).toBe("sku-6");
+    expect(s.batches).toEqual(before);
+    expect(s.transactions).toHaveLength(0);
+    expect(interact(s, { type: "promotion", promotion: "lunch" }).ok).toBe(
+      false,
+    );
+    expect(
+      s.events.filter((e) => e.topic.includes("promotion/screen/noticed")),
+    ).toHaveLength(2);
+    conservation(s);
+  });
+  it("keeps an agent-approved bakery deal when the campaign changes", () => {
+    const s = createStore();
+    decide(s, "meal", true);
+    expect(s.promotion).toBe("bakery");
+    interact(s, { type: "promotion", promotion: "lunch" });
+    expect(s.products[6].price).toBe(
+      Math.round(s.products[6].regularPrice * 0.8),
+    );
+    interact(s, { type: "promotion", promotion: "welcome" });
+    expect(s.products[16].price).toBe(s.products[16].regularPrice);
+    expect(s.products[6].price).toBe(
+      Math.round(s.products[6].regularPrice * 0.8),
+    );
+    conservation(s);
+  });
+  it("reserves a guide, fulfills a need only after a shelf pick and never grants free sales", () => {
+    const s = createStore(),
+      p = s.people[0];
+    s.nextSocialAt = s.nextMishapAt = s.nextSecurityAt = Infinity;
+    expect(interact(s, { type: "help-need", personId: p.id }).ok).toBe(true);
+    expect(interact(s, { type: "help-need", personId: p.id }).ok).toBe(false);
+    const a = s.activities.find((a) => a.kind === "help")!;
+    const colleague = a.people.find((id) => id !== p.id)!;
+    decide(s, "restock", true);
+    expect(s.tasks.some((t) => t.employeeId === colleague)).toBe(false);
+    expect(s.needsHelped).toBe(0);
+    until(s, () => p.need?.status === "fulfilled");
+    expect(s.needsHelped).toBe(1);
+    expect(p.basket.some((l) => l.productId === "sku-18")).toBe(true);
+    expect(
+      s.events.some((e) => e.topic.endsWith("people/0/need/fulfilled")),
+    ).toBe(true);
+    conservation(s);
+  });
+  it("checks a genuine unpaid unit and settles it exactly once after the guard arrives", () => {
+    const s = createStore();
+    s.nextSocialAt = s.nextMishapAt = Infinity;
+    until(s, () => !!activeSecurityCase(s));
+    const c = activeSecurityCase(s)!,
+      p = s.people.find((p) => p.id === c.shopperId)!,
+      guard = s.people.find((p) => p.job === "security")!;
+    expect(c.kind).toBe("receipt");
+    expect(p.basket.reduce((n, l) => n + l.quantity, 0)).toBe(1);
+    const before = metrics(s).revenue,
+      guardPosition = [...guard.position];
+    expect(interact(s, { type: "security-check", caseId: c.id }).ok).toBe(true);
+    expect(interact(s, { type: "security-check", caseId: c.id }).ok).toBe(
+      false,
+    );
+    expect(metrics(s).revenue).toBe(before);
+    expect(guard.position).toEqual(guardPosition);
+    until(s, () => c.stage === "resolved");
+    expect(p.basket).toHaveLength(0);
+    expect(s.transactions.filter((t) => t.source === "assisted")).toHaveLength(
+      1,
+    );
+    expect(c.outcome).toContain("handheld");
+    expect(p.securityCaseId).toBeUndefined();
+    const count = s.transactions.length;
+    expect(interact(s, { type: "security-check", caseId: c.id }).ok).toBe(
+      false,
+    );
+    expect(s.transactions).toHaveLength(count);
+    conservation(s);
+  });
+  it("can send the unpaid item back to a real staffed checkout without awarding revenue", () => {
+    const s = createStore();
+    until(s, () => !!activeSecurityCase(s));
+    const c = activeSecurityCase(s)!,
+      p = s.people.find((p) => p.id === c.shopperId)!;
+    const before = metrics(s).revenue;
+    expect(interact(s, { type: "security-checkout", caseId: c.id }).ok).toBe(
+      true,
+    );
+    expect(c.stage).toBe("resolved");
+    expect(p.stage).toBe("queueing");
+    expect(p.basket.reduce((n, l) => n + l.quantity, 0)).toBe(1);
+    expect(metrics(s).revenue).toBe(before);
+    until(s, () => p.basket.length === 0);
+    expect(metrics(s).revenue).toBeGreaterThan(before);
+    conservation(s);
+  });
+  it("returns a paid bag and clears matched receipts without charging a second time", () => {
+    const s = createStore();
+    s.securityCompleted = 1; // Begin the deterministic story cycle at the paid-bag vignette.
+    until(s, () => !!activeSecurityCase(s));
+    const c = activeSecurityCase(s)!;
+    expect(c.kind).toBe("bag");
+    const paid = s.transactions.find((t) => t.id === c.transactionId)!;
+    expect(paid.lines.length).toBeGreaterThan(0);
+    expect(s.people.find((p) => p.id === c.shopperId)!.basket).toHaveLength(0);
+    interact(s, { type: "security-check", caseId: c.id });
+    until(s, () => c.stage === "resolved");
+    expect(c.outcome).toContain("bag returned");
+    expect(s.transactions.filter((t) => t.source === "assisted")).toHaveLength(
+      0,
+    );
+    until(s, () => activeSecurityCase(s)?.kind === "clear", 180);
+    const clear = activeSecurityCase(s)!;
+    interact(s, { type: "security-check", caseId: clear.id });
+    until(s, () => clear.stage === "resolved");
+    expect(clear.outcome).toContain("All items paid");
+    expect(s.transactions.filter((t) => t.source === "assisted")).toHaveLength(
+      0,
+    );
+    expect(
+      s.tasks.some(
+        (t) => s.people.find((p) => p.id === t.employeeId)?.job === "security",
+      ),
+    ).toBe(false);
     conservation(s);
   });
 });

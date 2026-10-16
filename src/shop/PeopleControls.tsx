@@ -15,6 +15,7 @@ import {
   personName,
   personActivity,
   canDirectPerson,
+  needText,
   type StoreCommand,
   type StoreState,
 } from "../simulation/store";
@@ -65,6 +66,9 @@ export function PersonInspector({
           </span>
         </div>
       </div>
+      {p.need?.status === "waiting" && (
+        <p className="person-need">“{needText(p)}”</p>
+      )}
       <p className="person-point-hint">
         <MousePointer2 size={16} />
         {canDirectPerson(p)
@@ -74,6 +78,26 @@ export function PersonInspector({
       <p className="person-current" data-testid="person-activity">
         {personActivity(state, p)}
       </p>
+      {p.need && p.need.status !== "fulfilled" && (
+        <button
+          className="need-help"
+          disabled={
+            p.need.status !== "waiting" ||
+            !canDirectPerson(p) ||
+            active?.kind === "help"
+          }
+          onClick={() => command({ type: "help-need", personId: id })}
+        >
+          <ShoppingBasket size={17} />
+          <span>
+            {p.need.status === "helping" || active?.kind === "help"
+              ? "On the way to a good find"
+              : p.need.kind === "coffee"
+                ? "Help find coffee"
+                : "Help find lunch"}
+          </span>
+        </button>
+      )}
       <button
         className="person-more"
         aria-expanded={expanded}
@@ -266,7 +290,9 @@ export function PeopleList({
             <button
               key={p.id}
               aria-label={`Select ${personName(p)}, ${p.role}`}
-              onClick={() => onSelect(`person:${p.id}`)}
+              onClick={() =>
+                onSelect(p.job === "security" ? "security" : `person:${p.id}`)
+              }
             >
               <i style={{ background: p.outfit }} />
               <span>

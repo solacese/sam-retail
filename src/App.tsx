@@ -47,6 +47,7 @@ import {
   FloorInspector,
   PeopleList,
 } from "./shop/PeopleControls";
+import { PromotionInspector, SecurityInspector } from "./shop/ShopLifeControls";
 import { StorePulse } from "./shop/StorePulse";
 const StoreScene = lazy(() => import("./shop/StoreScene"));
 const money = (n: number) =>
@@ -171,7 +172,7 @@ function Inspector({
                     <strong>{p.name}</strong>
                     <small>
                       {money(p.price)}
-                      {state.mealActive && id === "bakery" ? " · deal" : ""}
+                      {p.price < p.regularPrice ? " · deal" : ""}
                       {expiry < 600
                         ? ` · ${Math.max(0, Math.ceil((expiry - state.time) / 60))}m to expiry`
                         : ""}
@@ -543,7 +544,7 @@ export default function App() {
               </button>
             </div>
             <span className="camera-hint">
-              Click a person or shelf · drag to explore
+              Click people, shelves or the screen · drag to explore
             </span>
           </div>
         </section>
@@ -551,7 +552,19 @@ export default function App() {
           className={`store-sidebar${selected ? " has-selection" : ""}${selected?.startsWith("person:") ? " has-person" : ""}`}
           aria-label="Store operations"
         >
-          {selected?.startsWith("person:") ? (
+          {selected === "promotions" ? (
+            <PromotionInspector
+              state={s}
+              command={command}
+              onClose={() => setSelected(null)}
+            />
+          ) : selected === "security" ? (
+            <SecurityInspector
+              state={s}
+              command={command}
+              onClose={() => setSelected(null)}
+            />
+          ) : selected?.startsWith("person:") ? (
             <PersonInspector
               key={selected}
               id={Number(selected.split(":")[1])}
@@ -668,7 +681,14 @@ export default function App() {
               );
             })}
             <div className="utility-inspectors">
-              {["checkouts", "stockroom", "receiving", "pickup"].map((id) => (
+              {[
+                "checkouts",
+                "stockroom",
+                "receiving",
+                "pickup",
+                "promotions",
+                "security",
+              ].map((id) => (
                 <button key={id} onClick={() => setSelected(id)}>
                   {id === "pickup"
                     ? "Collection"

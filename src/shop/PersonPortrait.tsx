@@ -46,6 +46,13 @@ export function PersonPortrait({ person: p }: { person: Person }) {
         fill={p.skin}
       />
       <path d={fringes[style]} fill={hair} />
+      {p.job === "security" && (
+        <g>
+          <path d="M20 31 Q21 9 48 9 Q75 9 76 31Z" fill="#526c83" />
+          <path d="M19 30 Q48 23 77 30 L72 36 Q48 30 24 36Z" fill="#3c566d" />
+          <circle cx="48" cy="22" r="5" fill="#edcb77" />
+        </g>
+      )}
       <g stroke={hair} strokeWidth="2.2" strokeLinecap="round" fill="none">
         <path d="M32 40 Q36 37 40 40" />
         <path d="M56 40 Q60 37 64 40" />
