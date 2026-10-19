@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { ArrowUpRight, Box, Radio, Thermometer, Users } from "lucide-react";
+import { ArrowUpRight, Box, Thermometer } from "lucide-react";
 import type { Category, StoreState } from "../simulation/store";
+import { EVENT_COLORS } from "./eventEffects";
 const categories: Record<Category, { label: string; color: string }> = {
-  inventory: { label: "Inventory", color: "#72916a" },
+  inventory: { label: "Inventory", color: EVENT_COLORS.inventory },
   pricing: { label: "Pricing", color: "#c39c56" },
-  purchases: { label: "Purchases", color: "#bf8872" },
+  purchases: { label: "Purchases", color: EVENT_COLORS.payment },
   iot: { label: "Devices", color: "#7aabb0" },
   agents: { label: "Agents", color: "#a392b4" },
   operations: { label: "Operations", color: "#a2aa84" },
@@ -37,9 +38,6 @@ export function StorePulse({
     totals.receiving +
     totals.held +
     totals.floor;
-  const shoppers = state.people.filter(
-    (p) => p.role === "shopper" && p.stage !== "outside",
-  ).length;
   const rows = state.events
     .filter((e) => filter === "all" || e.category === filter)
     .slice(0, 32);
@@ -167,21 +165,6 @@ export function StorePulse({
           <span>Target 2–5°C</span>
           <span>8°C</span>
         </div>
-        <div className="pulse-occupancy">
-          <div>
-            <Users size={14} />
-            <strong>{shoppers}</strong>
-            <span>shoppers</span>
-          </div>
-          <div>
-            <Radio size={14} />
-            <strong>
-              {state.checkouts.filter(Boolean).length}
-              <small> / 3</small>
-            </strong>
-            <span>checkouts open</span>
-          </div>
-        </div>
       </section>
       <section className="pulse-activity" aria-label="Recent event activity">
         <div className="pulse-section-heading">
@@ -263,7 +246,9 @@ export function StorePulse({
               />
               <div>
                 <div className="pulse-event-meta">
-                  <strong>{categories[event.category].label}</strong>
+                  <strong style={{ color: categories[event.category].color }}>
+                    {categories[event.category].label}
+                  </strong>
                   <time>{eventTime(event.at)}</time>
                 </div>
                 <p>{event.message}</p>

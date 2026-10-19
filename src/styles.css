@@ -31,7 +31,9 @@ select {
   -webkit-tap-highlight-color: transparent;
 }
 button,
-select {
+select,
+input,
+textarea {
   font: inherit;
 }
 button {
@@ -2535,8 +2537,8 @@ button:hover:not(:disabled) {
 
 @media (min-width: 1121px) {
   .workspace {
-    height: max(735px, calc(100dvh - 211px));
-    min-height: 735px;
+    height: max(540px, calc(100dvh - 176px));
+    min-height: 540px;
   }
   .shop-stage,
   .canvas-wrap {
@@ -2906,5 +2908,178 @@ button:hover:not(:disabled) {
   }
   .store-sidebar.has-selection .shop-chat {
     display: none;
+  }
+}
+
+/* One type family, quiet surfaces, and color shared by the feed and shop floor. */
+:root {
+  --event-payment: #408dcb;
+  --event-inventory: #58a775;
+}
+code {
+  font-family: inherit;
+}
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #b68d4d;
+  outline-offset: 3px;
+}
+.rail-title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+}
+.scene-caption h1 {
+  margin: 0;
+}
+.recommendation {
+  background: #f4f5ec;
+  border-color: #e0e5d6;
+  box-shadow: 0 2px 3px #28463b03;
+  gap: 8px;
+}
+.recommendation:hover {
+  background: #eaf0e2;
+  transform: none;
+}
+.rec-agent {
+  color: #5c7959;
+  font-size: 11px;
+}
+.rec-evidence,
+.agent-intro {
+  color: #687760;
+}
+.count-pill {
+  font-size: 11px;
+  background: #e9eedf;
+  border: 0;
+  color: #547047;
+}
+.pulse-event time,
+.pulse-event code {
+  color: #75836c;
+}
+.pulse-event code {
+  font-size: 10px;
+}
+.shop-event-bubble {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid #b9d8eb;
+  border-radius: 12px 12px 12px 3px;
+  background: #edf8ff;
+  color: #236b9c;
+  box-shadow: 0 3px 10px #244b6320;
+  font:
+    700 12px/1.25 Manrope,
+    sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  will-change: transform, opacity;
+}
+.shop-event-bubble.inventory {
+  border-color: #b8dbbd;
+  color: #317149;
+  background: #effaeb;
+  box-shadow: 0 3px 10px #244b3020;
+}
+.shop-event-bubble svg {
+  flex-shrink: 0;
+}
+.stream-event.inventory .event-category {
+  color: #317149;
+}
+.stream-event.purchases .event-category {
+  color: #236b9c;
+}
+@media (min-width: 1121px) {
+  .app-header {
+    height: 72px;
+    padding: 0 28px;
+  }
+  .kpi-strip {
+    height: 104px;
+    padding: 14px 28px;
+    gap: 16px;
+  }
+  .kpi > strong {
+    font-size: 28px;
+    margin: 3px 0 2px;
+  }
+  .kpi > span {
+    font-size: 12px;
+  }
+  .kpi small {
+    font-size: 11px;
+  }
+  .store-pulse {
+    padding: 20px 16px 14px;
+    gap: 14px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+  .store-pulse > section:not(.pulse-stream),
+  .pulse-heading {
+    flex-shrink: 0;
+  }
+  .pulse-stream {
+    min-height: 224px;
+  }
+  .pulse-big-number {
+    margin: 7px 0 9px;
+  }
+  .pulse-occupancy {
+    margin-top: 11px;
+  }
+  .pulse-activity {
+    padding-top: 12px;
+  }
+  .store-sidebar {
+    padding-top: 20px;
+    scrollbar-width: thin;
+  }
+  .scene-caption {
+    padding: 20px 24px 0;
+  }
+  .scene-caption h1 {
+    font-size: 24px;
+  }
+  .scene-footer {
+    bottom: 18px;
+    left: 20px;
+    right: 20px;
+  }
+  .camera-hint {
+    display: none;
+  }
+  .agent-intro {
+    margin: 10px 0 14px;
+  }
+  .recommendation {
+    padding: 14px;
+  }
+  .shop-chat {
+    margin-top: 20px;
+  }
+}
+@media (max-width: 760px) {
+  .shop-event-bubble {
+    font-size: 10px;
+    padding: 5px 7px;
+    gap: 4px;
+  }
+  .shop-event-bubble svg {
+    width: 11px;
+    height: 11px;
+  }
+  .rail-title {
+    font-size: 18px;
+  }
+  .agent-intro {
+    font-size: 14px;
   }
 }

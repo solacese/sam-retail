@@ -1114,3 +1114,65 @@ test("shop chat recovers from an unavailable service and renders replies as text
   await expect(chat.locator("script")).toHaveCount(0);
   await expect(chat.getByRole("textbox")).toBeEnabled();
 });
+
+test("real payments and stock changes appear on the floor, freeze on pause and share the interface font", async ({
+  page,
+}, testInfo) => {
+  await openStore(page);
+  await page.getByRole("button", { name: "2×", exact: true }).click();
+  const payment = page.locator(".shop-event-bubble.payment");
+  const inventory = page.locator(".shop-event-bubble.inventory");
+  await expect(inventory.first()).toBeVisible({ timeout: 15000 });
+  await expect(inventory.first()).toHaveAttribute(
+    "aria-label",
+    /^Inventory updated:/,
+  );
+  await expect(payment.first()).toBeVisible({ timeout: 30000 });
+  await pause(page);
+  const bubble = payment.first();
+  await expect(bubble).toHaveText(/Paid €/);
+  const eventId = await bubble.getAttribute("data-event-id");
+  const color = await bubble.evaluate((el) => getComputedStyle(el).color);
+  expect(color).toBe("rgb(35, 107, 156)");
+  await page.waitForTimeout(350);
+  const frozen = await bubble.evaluate((el) => el.getAttribute("style"));
+  await page.waitForTimeout(1100);
+  await expect(bubble).toHaveAttribute("data-event-id", eventId!);
+  expect(await bubble.evaluate((el) => el.getAttribute("style"))).toBe(frozen);
+  expect(
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+      return (
+        document.fonts.check("600 16px Manrope") &&
+        [
+          document.body,
+          document.querySelector("textarea"),
+          document.querySelector(".shop-event-bubble"),
+        ].every(
+          (el) => el && getComputedStyle(el).fontFamily.includes("Manrope"),
+        )
+      );
+    }),
+  ).toBe(true);
+  if (testInfo.project.name === "desktop") {
+    expect(
+      await page.evaluate(() => document.documentElement.scrollHeight),
+    ).toBeLessThanOrEqual(901);
+    await page.screenshot({
+      path: "/tmp/abc-polished-events-desktop.png",
+      fullPage: true,
+    });
+  }
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page
+    .getByRole("button", { name: "Play simulation", exact: true })
+    .click();
+  // Existing feedback stays anchored; reduced motion removes the floating movement.
+  await expect(async () => {
+    const active = await page
+      .locator(".shop-event-bubble")
+      .first()
+      .getAttribute("style");
+    expect(active).toContain("translateY(0px)");
+  }).toPass({ timeout: 5000 });
+});

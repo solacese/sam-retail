@@ -165,6 +165,8 @@ export interface StoreEvent {
   topic: string;
   message: string;
   target?: string;
+  /** Physical source of the event, when it occurs at a particular fixture. */
+  position?: Point;
 }
 export type ActivityKind =
   | "chat"
@@ -614,6 +616,7 @@ function emit(
   suffix: string,
   message: string,
   target?: string,
+  position?: Point,
 ) {
   s.events.unshift({
     id: s.nextEvent++,
@@ -622,6 +625,7 @@ function emit(
     topic: `abc/retail/v1/fr/paris-flagship/${suffix}`,
     message,
     target,
+    position,
   });
   if (s.events.length > 600) s.events.length = 600;
 }
@@ -971,6 +975,7 @@ function settle(
   cargo: BasketLine[],
   source: "till" | "online" | "assisted",
   location: "inBaskets" | "inTransit",
+  checkout?: number,
 ) {
   if (!cargo.length) return;
   const lines = cargo.map((l) => {
@@ -1007,6 +1012,9 @@ function settle(
       : source === "assisted"
         ? "security"
         : "checkouts",
+    source === "till" && checkout !== undefined
+      ? [...TILLS[checkout]]
+      : undefined,
   );
 }
 function joinQueue(s: StoreState, p: Person) {
@@ -1272,6 +1280,7 @@ function staffStep(s: StoreState, p: Person, dt: number) {
       `stock/${product.id}/picked`,
       `${task.kind === "restock" ? "Replenishment" : "Collection"} stock picked by a colleague.`,
       product.department,
+      task.kind === "restock" ? [...p.position] : undefined,
     );
   } else {
     if (task.kind === "restock") {
@@ -2415,7 +2424,7 @@ function leaveCheckout(s: StoreState, p: Person) {
       quantity: l.quantity - (held.length && i === 0 ? 1 : 0),
     }))
     .filter((l) => l.quantity > 0);
-  settle(s, paid, "till", "inBaskets");
+  settle(s, paid, "till", "inBaskets", p.checkout);
   p.basket = held;
   const returnedCase = s.securityCases.findLast(
     (c) =>

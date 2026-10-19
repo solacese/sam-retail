@@ -1,7 +1,9 @@
 import {
   Component,
+  createContext,
   Suspense,
   useEffect,
+  useContext,
   useMemo,
   useRef,
   useState,
@@ -9,10 +11,17 @@ import {
   type ReactNode,
 } from "react";
 import { Canvas, events, useFrame, useThree } from "@react-three/fiber";
-import { Billboard, OrbitControls } from "@react-three/drei";
+import { Billboard, Html, OrbitControls } from "@react-three/drei";
+import { Check, PackageCheck } from "lucide-react";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import * as THREE from "three";
 import { hairColor } from "./PersonPortrait";
+import {
+  EVENT_COLORS,
+  EVENT_EFFECT_SECONDS,
+  shopEventEffects,
+  type ShopEventEffect,
+} from "./eventEffects";
 import type { OrbitControls as Controls } from "three-stdlib";
 import {
   DEPARTMENTS,
@@ -35,6 +44,7 @@ const GREEN = "#28594a",
   WOOD = "#c99e70",
   CREAM = "#f5edda";
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+const ShopFontReady = createContext(false);
 const roundedGeometry = new RoundedBoxGeometry(1, 1, 1, 1, 0.1);
 const materials = new Map<string, THREE.MeshStandardMaterial>();
 function humanRoot(object: THREE.Object3D): THREE.Object3D | null {
@@ -114,6 +124,7 @@ function Sign({
   flat?: boolean;
   bubble?: boolean;
 }) {
+  const fontReady = useContext(ShopFontReady);
   const texture = useMemo(() => {
     const canvas = document.createElement("canvas");
     canvas.width = 768;
@@ -131,14 +142,14 @@ function Sign({
       ctx.fill();
     } else ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = color;
-    ctx.font = `600 ${bubble ? 57 : small ? 62 : 70}px system-ui, sans-serif`;
+    ctx.font = `600 ${bubble ? 57 : small ? 62 : 70}px Manrope, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(text, 384, canvas.height / 2 - (bubble ? 10 : 0), 700);
     const t = new THREE.CanvasTexture(canvas);
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
-  }, [text, color, background, small, bubble]);
+  }, [text, color, background, small, bubble, fontReady]);
   useEffect(() => () => texture.dispose(), [texture]);
   return (
     <mesh position={at} rotation={flat ? [-Math.PI / 2, 0, 0] : [0, 0, 0]}>
@@ -430,6 +441,7 @@ function DepartmentFixture({
   } = department;
   const flash = state.events.find(
     (e) =>
+      e.category !== "inventory" &&
       e.target === department.id &&
       state.time - e.at < (e.topic.includes("/strategy/") ? 8 : 1.2),
   );
@@ -1382,6 +1394,102 @@ function DroppedItem({
     </group>
   );
 }
+function EventPulse({
+  effect,
+  store,
+  running,
+  reduced,
+}: {
+  effect: ShopEventEffect;
+  store: MutableRefObject<StoreState>;
+  running: MutableRefObject<boolean>;
+  reduced: boolean;
+}) {
+  const ring = useRef<THREE.Mesh>(null!);
+  const glow = useRef<THREE.Mesh>(null!);
+  const bubble = useRef<HTMLDivElement>(null!);
+  const visualTime = useRef(store.current.time);
+  const color = EVENT_COLORS[effect.kind];
+  useFrame((_, dt) => {
+    if (running.current)
+      visualTime.current +=
+        (store.current.time - visualTime.current) *
+        (1 - Math.exp(-Math.min(dt, 0.1) * 18));
+    const progress = Math.max(
+      0,
+      Math.min(1, (visualTime.current - effect.at) / EVENT_EFFECT_SECONDS),
+    );
+    const fade = Math.min(1, (1 - progress) * 3);
+    if (ring.current) {
+      ring.current.scale.setScalar(reduced ? 1 : 0.8 + progress * 0.9);
+      (ring.current.material as THREE.MeshBasicMaterial).opacity = fade * 0.65;
+      (glow.current.material as THREE.MeshBasicMaterial).opacity = fade * 0.16;
+    }
+    if (bubble.current) {
+      bubble.current.style.opacity = String(fade);
+      bubble.current.style.transform = `translateY(${reduced ? 0 : -progress * 12}px)`;
+    }
+  });
+  return (
+    <group position={[effect.position[0], 0, effect.position[1]]}>
+      <mesh
+        ref={glow}
+        position={[0, 0.075, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        raycast={() => null}
+      >
+        <circleGeometry args={[effect.kind === "payment" ? 1.9 : 1.3, 32]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0.16}
+          depthWrite={false}
+        />
+      </mesh>
+      <mesh
+        ref={ring}
+        position={[0, 0.08, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        raycast={() => null}
+      >
+        <ringGeometry
+          args={[
+            effect.kind === "payment" ? 1.75 : 1.1,
+            effect.kind === "payment" ? 1.85 : 1.2,
+            32,
+          ]}
+        />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={0.65}
+          depthWrite={false}
+        />
+      </mesh>
+      <Html
+        center
+        position={[0, effect.kind === "payment" ? 3.15 : 3.65, 0]}
+        zIndexRange={[4, 0]}
+        style={{ pointerEvents: "none" }}
+      >
+        <div
+          ref={bubble}
+          className={`shop-event-bubble ${effect.kind}`}
+          role="img"
+          aria-label={effect.description}
+          data-event-id={effect.id}
+        >
+          {effect.kind === "payment" ? (
+            <Check size={13} strokeWidth={3} />
+          ) : (
+            <PackageCheck size={13} />
+          )}
+          <span>{effect.label}</span>
+        </div>
+      </Html>
+    </group>
+  );
+}
 function World({
   state,
   store,
@@ -1401,8 +1509,18 @@ function World({
 }) {
   const person = state.people.find((p) => selected === `person:${p.id}`);
   const destination = person?.destination;
+  const effects = shopEventEffects(state);
   return (
     <group>
+      {effects.map((effect) => (
+        <EventPulse
+          key={effect.id}
+          effect={effect}
+          store={store}
+          running={running}
+          reduced={reduced}
+        />
+      ))}
       <group
         onClick={(e) => {
           if (e.delta > 5) return;
@@ -1694,6 +1812,19 @@ export default function StoreScene({
   cameraReset: number;
   active: boolean;
 }) {
+  const [fontReady, setFontReady] = useState(false);
+  useEffect(() => {
+    let active = true;
+    document.fonts
+      .load("600 16px Manrope")
+      .then(() => {
+        if (active) setFontReady(true);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
   const selection = useRef(selected);
   selection.current = selected;
   const [reduced, setReduced] = useState(
@@ -1724,104 +1855,107 @@ export default function StoreScene({
         <Suspense
           fallback={<div className="scene-loading">Opening your store…</div>}
         >
-          <Canvas
-            events={(rootStore) => ({
-              ...events(rootStore),
-              filter: (hits) => {
-                const state = rootStore.getState();
-                hits = hits.filter(
-                  (hit) => humanRoot(hit.object)?.visible !== false,
-                );
-                if (selection.current?.startsWith("person:")) {
-                  let fixture =
-                    hits.find((hit) => !hit.object.userData.personHitArea)
-                      ?.object ?? null;
-                  while (fixture && !fixture.userData.departmentId)
-                    fixture = fixture.parent;
-                  // Once directing someone, a shelf tap is an order rather than a near miss on its neighbour.
-                  if (fixture)
-                    return hits.filter(
-                      (hit) => !hit.object.userData.personHitArea,
-                    );
-                }
-                // A generous target must never steal a click on a neighbour's visible body.
-                const body = hits.find(
-                  (hit) =>
-                    !hit.object.userData.personHitArea && humanRoot(hit.object),
-                );
-                let chosen = body && humanRoot(body.object);
-                if (!chosen) {
-                  let closest = Infinity;
-                  for (const hit of hits.filter(
-                    (hit) => hit.object.userData.personHitArea,
-                  )) {
-                    const root = humanRoot(hit.object)!;
-                    const centre = root
-                      .localToWorld(new THREE.Vector3(0, 1.05, 0))
-                      .project(state.camera);
-                    const distance = Math.hypot(
-                      (centre.x - state.pointer.x) * state.size.width,
-                      (centre.y - state.pointer.y) * state.size.height,
-                    );
-                    if (distance < closest) {
-                      closest = distance;
-                      chosen = root;
+          <ShopFontReady.Provider value={fontReady}>
+            <Canvas
+              events={(rootStore) => ({
+                ...events(rootStore),
+                filter: (hits) => {
+                  const state = rootStore.getState();
+                  hits = hits.filter(
+                    (hit) => humanRoot(hit.object)?.visible !== false,
+                  );
+                  if (selection.current?.startsWith("person:")) {
+                    let fixture =
+                      hits.find((hit) => !hit.object.userData.personHitArea)
+                        ?.object ?? null;
+                    while (fixture && !fixture.userData.departmentId)
+                      fixture = fixture.parent;
+                    // Once directing someone, a shelf tap is an order rather than a near miss on its neighbour.
+                    if (fixture)
+                      return hits.filter(
+                        (hit) => !hit.object.userData.personHitArea,
+                      );
+                  }
+                  // A generous target must never steal a click on a neighbour's visible body.
+                  const body = hits.find(
+                    (hit) =>
+                      !hit.object.userData.personHitArea &&
+                      humanRoot(hit.object),
+                  );
+                  let chosen = body && humanRoot(body.object);
+                  if (!chosen) {
+                    let closest = Infinity;
+                    for (const hit of hits.filter(
+                      (hit) => hit.object.userData.personHitArea,
+                    )) {
+                      const root = humanRoot(hit.object)!;
+                      const centre = root
+                        .localToWorld(new THREE.Vector3(0, 1.05, 0))
+                        .project(state.camera);
+                      const distance = Math.hypot(
+                        (centre.x - state.pointer.x) * state.size.width,
+                        (centre.y - state.pointer.y) * state.size.height,
+                      );
+                      if (distance < closest) {
+                        closest = distance;
+                        chosen = root;
+                      }
                     }
                   }
-                }
-                const filtered = hits.filter(
-                  (hit) =>
-                    !hit.object.userData.personHitArea ||
-                    humanRoot(hit.object) === chosen,
-                );
-                // Near misses count as a person click too, even beside a display edge.
-                const target = filtered.find(
-                  (hit) => hit.object.userData.personHitArea,
-                );
-                return target
-                  ? [target, ...filtered.filter((hit) => hit !== target)]
-                  : filtered;
-              },
-            })}
-            orthographic
-            frameloop={running.current && active ? "always" : "demand"}
-            shadows={!small}
-            dpr={[1, small ? 1.25 : 1.6]}
-            camera={{ position: [35, 43, 45], zoom: 18, near: 0.1, far: 150 }}
-            gl={{
-              antialias: true,
-              powerPreference: small ? "low-power" : "high-performance",
-            }}
-            fallback={fallback}
-            onCreated={({ gl }) => {
-              gl.setClearColor("#e7e3d4");
-            }}
-            aria-label="Interactive 3D supermarket. Drag to pan, pinch or scroll to zoom. Select a department to inspect it."
-          >
-            <ambientLight intensity={0.9} />
-            <hemisphereLight args={["#fff4d6", "#aabda4", 1.0]} />
-            <directionalLight
-              position={[2, 22, 12]}
-              intensity={2.2}
-              castShadow={!small}
-              shadow-mapSize={[1024, 1024]}
-              shadow-camera-left={-25}
-              shadow-camera-right={25}
-              shadow-camera-top={25}
-              shadow-camera-bottom={-25}
-              shadow-normalBias={0.06}
-            />
-            <World
-              state={state}
-              store={store}
-              running={running}
-              reduced={reduced}
-              selected={selected}
-              onSelect={onSelect}
-              onFloorClick={onFloorClick}
-            />
-            <Camera reset={cameraReset} />
-          </Canvas>
+                  const filtered = hits.filter(
+                    (hit) =>
+                      !hit.object.userData.personHitArea ||
+                      humanRoot(hit.object) === chosen,
+                  );
+                  // Near misses count as a person click too, even beside a display edge.
+                  const target = filtered.find(
+                    (hit) => hit.object.userData.personHitArea,
+                  );
+                  return target
+                    ? [target, ...filtered.filter((hit) => hit !== target)]
+                    : filtered;
+                },
+              })}
+              orthographic
+              frameloop={running.current && active ? "always" : "demand"}
+              shadows={!small}
+              dpr={[1, small ? 1.25 : 1.6]}
+              camera={{ position: [35, 43, 45], zoom: 18, near: 0.1, far: 150 }}
+              gl={{
+                antialias: true,
+                powerPreference: small ? "low-power" : "high-performance",
+              }}
+              fallback={fallback}
+              onCreated={({ gl }) => {
+                gl.setClearColor("#e7e3d4");
+              }}
+              aria-label="Interactive 3D supermarket. Drag to pan, pinch or scroll to zoom. Select a department to inspect it."
+            >
+              <ambientLight intensity={0.9} />
+              <hemisphereLight args={["#fff4d6", "#aabda4", 1.0]} />
+              <directionalLight
+                position={[2, 22, 12]}
+                intensity={2.2}
+                castShadow={!small}
+                shadow-mapSize={[1024, 1024]}
+                shadow-camera-left={-25}
+                shadow-camera-right={25}
+                shadow-camera-top={25}
+                shadow-camera-bottom={-25}
+                shadow-normalBias={0.06}
+              />
+              <World
+                state={state}
+                store={store}
+                running={running}
+                reduced={reduced}
+                selected={selected}
+                onSelect={onSelect}
+                onFloorClick={onFloorClick}
+              />
+              <Camera reset={cameraReset} />
+            </Canvas>
+          </ShopFontReady.Provider>
         </Suspense>
       ) : (
         fallback

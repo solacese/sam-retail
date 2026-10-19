@@ -408,7 +408,7 @@ export default function App() {
             {m.availability.toFixed(0)}
             <em>%</em>
           </strong>
-          <small>{m.units.toLocaleString()} units in stock</small>
+          <small>Products available on shelves</small>
         </div>
         <div className="kpi">
           <span>
@@ -460,7 +460,6 @@ export default function App() {
         <section className="shop-stage" aria-label="Paris Flagship shop floor">
           <div className="scene-caption">
             <div>
-              <span className="eyebrow">ABC SHOP · THE SHOP FLOOR</span>
               <h1>Paris Flagship</h1>
             </div>
             <span className="live-badge">
@@ -544,9 +543,7 @@ export default function App() {
                 <RotateCcw size={17} />
               </button>
             </div>
-            <span className="camera-hint">
-              Click people, shelves or the screen · drag to explore
-            </span>
+            <span className="camera-hint">Click to explore · drag to move</span>
           </div>
         </section>
         <aside
@@ -590,14 +587,14 @@ export default function App() {
           ) : (
             <>
               <div className="section-heading">
-                <span className="eyebrow">YOUR AGENT TEAM</span>
+                <h2 className="rail-title">Agent team</h2>
                 <span className="count-pill">
                   {priorities.length} to review
                 </span>
               </div>
               <p className="agent-intro">
                 {priorities.length
-                  ? "You set the priorities. Your team handles the details."
+                  ? "You choose. Your team takes care of the details."
                   : "All priorities set. Your team is on it."}
               </p>
               <div className="recommendations">
