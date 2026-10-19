@@ -91,7 +91,7 @@ export function PromotionInspector({ state, command, onClose }: Props) {
 export function SecurityInspector({ state, command, onClose }: Props) {
   const guard = state.people.find((p) => p.job === "security")!,
     c = activeSecurityCase(state),
-    last = state.securityCases.at(-1);
+    last = state.securityCases.findLast((incident) => incident.outcome);
   const shopper = state.people.find((p) => p.id === c?.shopperId);
   return (
     <section
