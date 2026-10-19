@@ -709,7 +709,7 @@ export function createStore(seed = 2401): StoreState {
         action: "Protect product availability",
         alternative: "Keep stock lean",
         consequence:
-          "Agents keep a larger shelf buffer across every department and coordinate routine replenishment themselves.",
+          "Agents follow live shelf picks, keep a larger stock buffer across every department, and coordinate colleagues moving stock from the backroom.",
         tradeoff:
           "Fewer empty shelves, but more stock on the floor and more exposure to fresh-food waste.",
         status: "pending",
@@ -733,9 +733,9 @@ export function createStore(seed = 2401): StoreState {
         action: "Favor lower food waste",
         alternative: "Protect full-price margin",
         consequence:
-          "Let agents use a 20% deal on bakery items approaching expiry, with shelf, checkout and online prices kept in sync.",
+          "Use a 20% offer on bakery items close to expiry. Agents update the shop screen, shelf labels, checkout and online prices together.",
         tradeoff:
-          "More chance of selling fresh food in time, but less profit on each discounted item.",
+          "Less profit on each discounted item. Watch paid sales, gross profit and food waste to see how the offer is doing.",
         status: "pending",
       },
       {
@@ -1615,10 +1615,27 @@ export function evidence(s: StoreState, id: DecisionKind) {
 export function decisionImpact(s: StoreState, id: DecisionKind) {
   const choice = s.decisionLog.find((d) => d.id === id);
   if (!choice) return "";
-  if (id === "meal")
-    return choice.accepted
-      ? "Bakery prices −20%. Shoppers are visiting the deal."
-      : "Bakery stays at full price. More margin per item, with expiry risk.";
+  if (id === "meal") {
+    if (!choice.accepted)
+      return "Bakery stays at full price. More margin per item, with expiry risk.";
+    const lines = s.transactions
+      .filter((t) => t.at > choice.at)
+      .flatMap((t) => t.lines)
+      .filter(
+        (l) =>
+          s.products.find((p) => p.id === l.productId)?.department === "bakery",
+      );
+    const units = lines.reduce((n, l) => n + l.quantity, 0);
+    const sales = lines.reduce((n, l) => n + l.quantity * l.unitPrice, 0);
+    const cost = lines.reduce(
+      (n, l) =>
+        n + l.quantity * s.products.find((p) => p.id === l.productId)!.cost,
+      0,
+    );
+    return units
+      ? `Bakery prices −20%. Since approval: ${units} bakery ${units === 1 ? "item" : "items"} paid · €${(sales / 100).toFixed(2)} sales · €${((sales - cost) / 100).toFixed(2)} gross profit.`
+      : "Bakery prices −20%. Shelf, checkout and online prices agree. Waiting for paid sales.";
+  }
   if (id === "checkout")
     return choice.accepted
       ? s.checkouts[2]

@@ -3,6 +3,7 @@ import {
   metrics,
   personName,
   personActivity,
+  decisionImpact,
   type StoreState,
 } from "../simulation/store";
 export const storeTime = (seconds: number) =>
@@ -143,6 +144,7 @@ export function shopContext(s: StoreState) {
       alternative: r.alternative,
       consequence: r.consequence,
       tradeoff: r.tradeoff,
+      observedOutcome: decisionImpact(s, r.id),
     })),
     recentEvents: s.events
       .filter(

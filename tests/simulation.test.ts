@@ -1039,3 +1039,35 @@ describe("player mischief and emergent stories", () => {
     conservation(s);
   });
 });
+
+it("reports observed bakery sales after approval from paid transaction prices, without claiming uplift", () => {
+  const s = run(createStore(), 12);
+  const before = s.transactions.length;
+  expect(before).toBeGreaterThan(0);
+  decide(s, "meal", true);
+  const approvedAt = s.time;
+  expect(decisionImpact(s, "meal")).toContain("Waiting for paid sales");
+  run(s, 80);
+  const lines = s.transactions
+    .filter((t) => t.at > approvedAt)
+    .flatMap((t) => t.lines)
+    .filter(
+      (l) =>
+        s.products.find((p) => p.id === l.productId)!.department === "bakery",
+    );
+  const units = lines.reduce((n, l) => n + l.quantity, 0);
+  expect(units).toBeGreaterThan(0);
+  const revenue = lines.reduce((n, l) => n + l.unitPrice * l.quantity, 0);
+  const cost = lines.reduce(
+    (n, l) =>
+      n + s.products.find((p) => p.id === l.productId)!.cost * l.quantity,
+    0,
+  );
+  const outcome = decisionImpact(s, "meal");
+  expect(outcome).toContain(`${units} bakery items paid`);
+  expect(outcome).toContain(`€${(revenue / 100).toFixed(2)} sales`);
+  expect(outcome).toContain(
+    `€${((revenue - cost) / 100).toFixed(2)} gross profit`,
+  );
+  expect(outcome).not.toMatch(/uplift|incremental|saved|caused/i);
+});
