@@ -10,6 +10,8 @@ async function openStore(page: Page) {
       .locator("canvas")
       .or(page.getByRole("heading", { name: "Your store, at a glance" })),
   ).toBeVisible();
+  // Avoid clicking a moving target during the initial web-font swap on CI.
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
 }
 async function pause(page: Page) {
   await page
@@ -1119,7 +1121,13 @@ test("real payments and stock changes appear on the floor, freeze on pause and s
   page,
 }, testInfo) => {
   await openStore(page);
-  await page.getByRole("button", { name: "2×", exact: true }).click();
+  // Focus before the event arrives: keyboard pause does not spend a short-lived
+  // bubble's lifetime scrolling or waiting for pointer actionability on slow GPUs.
+  const pauseControl = page.getByRole("button", {
+    name: "Pause simulation",
+    exact: true,
+  });
+  await pauseControl.focus();
   const payment = page.locator(".shop-event-bubble.payment");
   const inventory = page.locator(".shop-event-bubble.inventory");
   await expect(inventory.first()).toBeVisible({ timeout: 15000 });
@@ -1128,7 +1136,10 @@ test("real payments and stock changes appear on the floor, freeze on pause and s
     /^Inventory updated:/,
   );
   await expect(payment.first()).toBeVisible({ timeout: 30000 });
-  await pause(page);
+  await pauseControl.press("Enter");
+  await expect(
+    page.getByRole("button", { name: "Play simulation", exact: true }),
+  ).toBeVisible();
   const bubble = payment.first();
   await expect(bubble).toHaveText(/Paid €/);
   const eventId = await bubble.getAttribute("data-event-id");

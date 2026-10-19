@@ -13,6 +13,17 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: desktop
+            browser: chromium
+          - project: mobile
+            browser: chromium
+          - project: mobile-safari
+            browser: webkit
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -21,14 +32,25 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
-      - run: npx playwright install --with-deps chromium webkit
-      - run: npm run test:e2e
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npm run test:e2e -- --project=${{ matrix.project }}
+      - name: Preserve browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: browser-failure-traces-${{ matrix.project }}
+          path: test-results/
+          retention-days: 3
+          if-no-files-found: ignore
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+        if: matrix.project == 'desktop'
       # Prepare the same Pages tar directly: upload-pages-artifact's nested
       # upload-artifact@v4 reference violates this organization's SHA policy.
       - name: Archive Pages artifact
+        if: matrix.project == 'desktop'
         run: tar --dereference --hard-dereference --directory dist --exclude=.git --exclude=.github -cf "$RUNNER_TEMP/artifact.tar" .
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: matrix.project == 'desktop'
         with:
           name: github-pages
           path: ${{ runner.temp }}/artifact.tar

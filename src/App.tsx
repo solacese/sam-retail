@@ -2,6 +2,7 @@ import {
   lazy,
   Suspense,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -79,7 +80,7 @@ function Dialog({
   wide?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null!);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current;
     el.showModal();
     return () => {
@@ -95,7 +96,15 @@ function Dialog({
         onClose();
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target !== e.currentTarget) return;
+        const bounds = e.currentTarget.getBoundingClientRect();
+        if (
+          e.clientX < bounds.left ||
+          e.clientX > bounds.right ||
+          e.clientY < bounds.top ||
+          e.clientY > bounds.bottom
+        )
+          onClose();
       }}
       aria-label={title}
     >
